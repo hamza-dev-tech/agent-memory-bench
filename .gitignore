@@ -1,0 +1,10 @@
+data/*.json
+results/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+*.egg-info/
+.neo4j/
