@@ -53,6 +53,8 @@ def main() -> int:
     ap.add_argument("--adversarial", type=int, default=CONFIG.adversarial_probes)
     ap.add_argument("--top-k", type=int, default=CONFIG.top_k)
     ap.add_argument("--run-id", default=CONFIG.run_id)
+    ap.add_argument("--report-only", action="store_true",
+                    help="rebuild RESULTS.md and review.csv from an existing log, run nothing")
     ap.add_argument("--max-turns", type=int, default=0,
                     help="truncate each conversation, for smoke tests only; recall will be meaningless")
     args = ap.parse_args()
@@ -80,6 +82,10 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     chat, judge = Chat(cfg), Judge(cfg)
     runner = Runner(cfg, chat, judge, out_dir / "probes.jsonl")
+
+    if args.report_only:
+        args.systems = []
+        print("report only: nothing will be run")
 
     try:
         for name in args.systems:
