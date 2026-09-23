@@ -8,6 +8,7 @@ really asks each system the same thing.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -197,3 +198,56 @@ def test_embed_server_speaks_openai(monkeypatch):
             assert len(json.load(r)["data"]) == 1
     finally:
         server.stop()
+
+
+def test_a_system_that_cannot_ingest_is_not_graded(tmp_path):
+    """The guard that keeps a broken run out of the results table.
+
+    The failure this is written against: mem0's every write was rejected by the
+    model endpoint, the store stayed empty, and the harness went on to grade
+    probes against it. Refusing on every answerable question and correctly
+    refusing the adversarial one produces a row of plausible numbers off nothing
+    at all, which is the exact shape of a result nobody should publish.
+    """
+    import dataclasses
+
+    import pytest
+
+    class BrokenSystem(FakeSystem):
+        key = "broken"
+        label = "Broken"
+
+        def add(self, user_key, text, meta):
+            raise RuntimeError("413 request too large")
+
+    cfg = dataclasses.replace(CONFIG, ingest_abort_after=10 ** 6)  # exercise the rate check
+    convs = dataset.build(CONFIG.dataset_path, 1, 4, 1, CONFIG.seed)
+    convs[0].turns = convs[0].turns[:40]
+    log = tmp_path / "probes.jsonl"
+
+    with pytest.raises(RuntimeError, match="lost 40 of 40 turns"):
+        Runner(cfg, FakeChat(), FakeJudge(), log).run_system(BrokenSystem(), convs)
+
+    graded = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    assert not [r for r in graded if r["kind"] == "probe"]
+
+
+def test_ingest_gives_up_early_when_every_turn_fails(tmp_path):
+    import pytest
+
+    class BrokenSystem(FakeSystem):
+        key = "broken"
+        label = "Broken"
+        attempts = 0
+
+        def add(self, user_key, text, meta):
+            type(self).attempts += 1
+            raise RuntimeError("no such model")
+
+    convs = dataset.build(CONFIG.dataset_path, 1, 4, 1, CONFIG.seed)
+    with pytest.raises(RuntimeError, match="configuration rather than luck"):
+        Runner(CONFIG, FakeChat(), FakeJudge(), tmp_path / "probes.jsonl").run_system(
+            BrokenSystem(), convs
+        )
+    # stopped at the threshold instead of walking all 419 turns
+    assert BrokenSystem.attempts == CONFIG.ingest_abort_after

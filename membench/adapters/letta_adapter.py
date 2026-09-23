@@ -9,9 +9,16 @@ Things a copier will trip over:
 * It needs a server and this box has no Docker. With no Postgres URI configured
   the server keeps everything in SQLite, so no container is involved:
 
-      pip install "letta==0.16.8"
+      python -m venv .venv-letta                      not the harness venv, see below
+      .venv-letta/Scripts/pip install "letta==0.16.8"
       set GROQ_API_KEY=...                            resolves the model handle
-      letta server --port 8283
+      .venv-letta/Scripts/letta server --port 8283
+
+  Its own environment on purpose. 0.16.8 resolves the openai SDK back to the
+  2.x line, and the harness runs 3.x, so installing the server next to mem0 and
+  langchain-openai means a downgrade underneath two of the systems being
+  measured. The server is a separate process reached over HTTP, so nothing is
+  lost by keeping it apart; the harness itself only needs letta-client.
 
   Pin that version. The `letta` name on PyPI is now Letta Code, a terminal agent
   that installs its own `letta` command and contains no REST server; 0.16.8 is

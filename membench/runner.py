@@ -88,8 +88,11 @@ class Runner:
             except Exception as e:  # one bad turn should not kill a 600 turn run
                 failures += 1
                 summary.errors.append(f"add {turn.dia_id}: {e}")
-                if failures > 20:
-                    raise
+                if failures == i and failures >= self.cfg.ingest_abort_after:
+                    raise RuntimeError(
+                        f"{system.label} failed on every one of the first {i} turns, so this "
+                        f"is configuration rather than luck. Last error: {e}"
+                    ) from e
             if i % 100 == 0:
                 print(f"    ingested {i}/{len(conv.turns)}")
         system.flush(run_key)
@@ -103,6 +106,19 @@ class Runner:
             "turns": len(conv.turns), "seconds": round(ingest_s, 2), "failures": failures,
         })
         print(f"    ingest took {ingest_s / 60:.1f} min ({failures} failures)")
+
+        lost = failures / max(1, len(conv.turns))
+        if lost > self.cfg.max_ingest_failure_rate:
+            # Probing now would produce a full row of numbers off a memory that
+            # is missing most of the conversation. Those numbers read as a
+            # measurement to anyone looking at the table later, including whoever
+            # wrote them, so nothing gets graded on this conversation.
+            raise RuntimeError(
+                f"{system.label} lost {failures} of {len(conv.turns)} turns on "
+                f"{conv.conversation_id} ({lost:.0%}, the limit is "
+                f"{self.cfg.max_ingest_failure_rate:.0%}). First error: "
+                f"{summary.errors[0] if summary.errors else 'not recorded'}"
+            )
 
         for n, probe in enumerate(pending, 1):
             try:

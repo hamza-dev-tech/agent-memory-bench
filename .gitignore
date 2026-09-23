@@ -2,6 +2,7 @@ data/*.json
 results/*
 !results/.gitkeep
 .venv/
+.venv-letta/
 venv/
 __pycache__/
 *.pyc

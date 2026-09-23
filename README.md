@@ -29,7 +29,7 @@ time per turn.
 | System | How it runs |
 | --- | --- |
 | Mem0 | open source, self-hosted |
-| Letta | open source, self-hosted server plus Ollama for its embeddings |
+| Letta | open source, self-hosted server in its own venv, see the adapter |
 | LangMem | open source, in process |
 | Zep (Graphiti) | open source engine, self-hosted |
 | GoodMem | hosted instance provided by the vendor |

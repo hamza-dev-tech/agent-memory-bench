@@ -47,6 +47,15 @@ class Config:
     top_k: int = int(_env("MEMBENCH_TOP_K", "10"))
     seed: int = 20260923
 
+    # ---- how much loss makes a number meaningless ----
+    # A system that could not store the conversation will still answer probes,
+    # abstain on most of them, and produce a recall number that looks like a
+    # measurement. It is not one, so the run refuses to grade past this.
+    max_ingest_failure_rate: float = 0.02
+    # Failing every turn from the first is a misconfiguration, not bad luck,
+    # and there is no reason to spend an hour proving it.
+    ingest_abort_after: int = 10
+
     # ---- grading ----
     judge_model: str = _env("MEMBENCH_JUDGE", "openai/gpt-oss-120b")
     no_answer_token: str = "NO ANSWER"
