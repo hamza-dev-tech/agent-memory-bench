@@ -57,6 +57,10 @@ class Runner:
         )
         print(f"\n=== {system.label} [{system.track}]")
         system.setup()
+        # after setup, not before: an adapter that asks the server what version
+        # it is cannot know until it has connected, and the version that ran is
+        # the one worth recording next to the number
+        summary.version, summary.config_notes = system.version, system.config_notes
         try:
             for conv in conversations:
                 self._one_conversation(system, conv, summary)

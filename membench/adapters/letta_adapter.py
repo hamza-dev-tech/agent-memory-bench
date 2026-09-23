@@ -1,70 +1,74 @@
-"""Letta (formerly MemGPT).
+"""Letta (formerly MemGPT), the SQLite line.
 
 Letta is an agent runtime rather than a retrieval library, so the unit of memory
 is an agent. This makes one agent per conversation, writes every turn into that
 agent's archival memory, and deletes the agent on the next reset.
 
-Things a copier will trip over:
+Running it at all took some deciding, and the write-up has to carry the result:
 
-* It needs a server and this box has no Docker. With no Postgres URI configured
-  the server keeps everything in SQLite, so no container is involved:
+* 0.16.8 is the newest release with a REST server, and it cannot run here.
+  Its server/db.py builds an asyncpg engine unconditionally and never reads the
+  SQLITE value sitting in its own settings, so with no Postgres it dies on a
+  refused connection to localhost:5432, wearing a "generator didn't stop after
+  athrow()" as a disguise. Its ORM is SQLite-ready, picking CommonVector over
+  pgvector; only the async engine never got the branch. Everything from 0.12.1
+  up is the same, and 0.32.x is Letta Code with no server in it.
+* **0.11.7, released 2025-09-04, is the last release that runs without
+  Postgres**, so it is what this adapter targets, and the results table says so
+  next to the number. That is a year older than the rest of the table. Point a
+  Postgres at 0.16.8 and the fair comparison is a route rename away: archival
+  memory became passages, and the three calls below move with it.
 
-      python -m venv .venv-letta                      not the harness venv, see below
-      .venv-letta/Scripts/pip install "letta==0.16.8" asyncpg
-      set GROQ_API_KEY=...                            resolves the model handle
+      python -m venv .venv-letta                      not the harness venv
+      .venv-letta/Scripts/pip install "letta==0.11.7" sqlite-vec
+      set OPENAI_API_KEY=...                          resolves the model handle
+      .venv-letta/Scripts/python scripts/patch_letta.py
       .venv-letta/Scripts/letta server --port 8283
 
-  Its own environment on purpose. 0.16.8 resolves the openai SDK back to the
-  2.x line, and the harness runs 3.x, so installing the server next to mem0 and
-  langchain-openai means a downgrade underneath two of the systems being
-  measured. The server is a separate process reached over HTTP, so nothing is
-  lost by keeping it apart; the harness itself only needs letta-client.
+  Its own environment because letta pins the openai SDK a long way back from
+  where the harness sits, and sqlite-vec because 0.11.7 imports it at module
+  scope from its ORM and does not declare it, the same shape of hole 0.16.8 has
+  around asyncpg.
 
-  asyncpg is not a typo. 0.16.8 imports it at module scope from its ORM base,
-  so the server will not boot without it even though SQLite is doing the work
-  and no Postgres exists. It is not in the package's own dependencies.
+Other things a copier will trip over:
 
-  Pin that version. The `letta` name on PyPI is now Letta Code, a terminal agent
-  that installs its own `letta` command and contains no REST server; 0.16.8 is
-  the last release that still carries `letta server`. It listens on
-  http://localhost:8283, and LETTA_BASE_URL points this adapter somewhere else.
-* The model handle is resolved when the agent is created and a miss is fatal,
-  so the server has to have been started with GROQ_API_KEY set. Letta registers
-  models as "<provider>/<model id>" and looks the handle up by exact string,
-  and Groq's own id already contains a slash, so the handle has two.
-* Embeddings are the awkward part. Letta computes them inside its own server
-  process, so it cannot be handed the shared LocalEmbedder object. Passing a
-  handle like ollama/nomic-embed-text would put it on a different build of the
-  model than everything else, which quietly turns the results table into a
-  comparison of two embedders as well as five memory systems. Instead the
-  harness serves the exact shared weights on a local endpoint and the agent is
-  created with an embedding_config pointing at it: same weights, same width,
-  same prefixes as the GoodMem baseline. See membench/embed_server.py.
+* The REST calls here are made directly rather than through letta-client. The
+  SDK is pinned to the server: 0.11.7 wants 0.1.307, and the 1.x line talks to
+  routes this server does not have. Three endpoints do not justify holding a
+  package hostage to that.
 * The agent is never messaged. Sending a turn as a message would hand the
   decision about what is worth remembering to the agent's own LLM, and reading
   the reply back would be Letta writing the answer instead of the shared model.
-  passages.create writes the turn verbatim and passages.search reads passages
-  back, so only retrieved text reaches the grader. The price is that the thing
-  Letta is known for, an agent curating its own memory, is not what gets
-  measured, and that belongs in the write-up. Archival search also returns no
-  similarity scores, so Chunk.score is None.
+  The price is that the thing Letta is known for, an agent curating its own
+  memory, is not what gets measured, and that belongs in the write-up.
+* Archival search returns text, a timestamp and tags. No id and no score, so
+  Chunk.score and Chunk.source are both None and no ranking of its own survives
+  into the log.
+* Letta embeds in its own process, so it cannot be handed the shared embedder
+  object. An ollama handle would be a different build of nomic and would turn
+  the table into a comparison of two embedders as well as five memory systems.
+  The harness serves the real weights on a local endpoint instead and the agent
+  is created pointing at it; Letta's openai embedding path is an AsyncOpenAI
+  client, which appends /embeddings to whatever base url it is given. See
+  membench/embed_server.py.
 
-Client calls are letta-client 1.12.1 (requirements.txt says >=0.1.0, which
-resolves there today; the 0.1.x line laid the resources out differently, so pin
-it if you care about reproducing a number). Routes and response shapes checked
-against the 0.16.8 server source.
-https://docs.letta.com/api/python/resources/agents/subresources/passages
-https://github.com/letta-ai/letta/blob/archive/letta/server/rest_api/routers/v1/agents.py
+Routes and payloads were read off the running server's own openapi.json rather
+than from the docs, which describe a later version.
 """
 from __future__ import annotations
 
 import os
+import re
 import uuid
+
+import httpx
 
 from ..embed_server import EmbedServer
 from .base import Chunk, MemorySystem, SearchResult, timed
 
 DEFAULT_BASE_URL = "http://localhost:8283"
+# 0.12.0 moved archival memory to /passages and made Postgres mandatory
+LAST_SQLITE_RELEASE = (0, 11)
 
 
 class LettaSystem(MemorySystem):
@@ -74,99 +78,103 @@ class LettaSystem(MemorySystem):
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.client = None
+        self.http: httpx.Client | None = None
         self.agent_id: str | None = None
         self.base_url = os.environ.get("LETTA_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
         self._embeddings = EmbedServer(cfg)
         self._embed_url = ""
 
-        # Groq's own id for this model already contains a slash, so the handle
-        # comes out with two of them. That is what the server stores.
-        self.model = os.environ.get("LETTA_MODEL", f"groq/{cfg.llm_model}")
+        # Only used to create the agent, never to answer anything, so the
+        # provider only has to resolve. The server reads the matching key from
+        # its own environment.
+        self.model = os.environ.get("LETTA_MODEL", f"openai/{cfg.llm_model}")
         # nomic is asymmetric and nothing downstream adds the prefixes, so the
         # adapter adds them here exactly as the GoodMem baseline does.
         self._prefixed = "nomic" in cfg.embed_model.lower()
 
-        # The runner reads version and config_notes before setup() runs, so both
-        # have to resolve without touching the server.
-        try:
-            from importlib.metadata import version
-            self.version = f"letta-client {version('letta-client')}"
-        except Exception:
-            self.version = "letta-client unknown"
+        # replaced in setup() with what the server reports, which is the version
+        # that actually ran
+        self.version = "letta server"
+        self.config_notes = self._notes("not contacted yet")
 
-        self.config_notes = (
-            f"self-hosted server at {self.base_url}, archival memory only. Turns go in with "
-            f"passages.create and come back with passages.search; the agent is never messaged, "
-            f"so nothing it generates reaches the grader. Embeddings are {cfg.embed_model}, the "
-            f"shared weights, served to the Letta server over a local endpoint because it embeds "
-            f"in process. Agent model handle {self.model}, needed to create the agent and unused "
-            f"for retrieval. "
-            f"Archival search is embedding similarity and returns no scores."
+    def _notes(self, version: str) -> str:
+        return (
+            f"self-hosted {version} server at {self.base_url} on SQLite, archival memory "
+            f"only. Turns go in with archival-memory and come back with its search; the "
+            f"agent is never messaged, so nothing it generates reaches the grader. "
+            f"Embeddings are {self.cfg.embed_model}, the shared weights, served to the "
+            f"server over a local endpoint because it embeds in process. Agent model "
+            f"handle {self.model}, needed to create the agent and unused for retrieval. "
+            f"Archival search returns no scores. Running at all needs one line changed in "
+            f"the installed package, see scripts/patch_letta.py: a Postgres server_default "
+            f"of now() is stored literally by SQLite and nothing can be written without "
+            f"it. It is a column default and touches nothing about what Letta stores or "
+            f"retrieves."
         )
 
     # -- lifecycle ---------------------------------------------------------------
 
     def setup(self) -> None:
+        self.http = httpx.Client(base_url=self.base_url, timeout=120.0)
         try:
-            from letta_client import Letta  # imported late so the package is optional
-        except ImportError as e:
-            raise RuntimeError(
-                "letta-client is not installed. Run: pip install 'letta-client>=1.0'. "
-                "The server it talks to is a separate install, see the top of this file. "
-                f"Failed on: {e}"
-            ) from e
-
-        # This SDK retries twice by default. No other adapter here retries, and
-        # a retry buys reliability with latency that the table would not show.
-        # api_key is left to the client, which reads LETTA_API_KEY; a local
-        # server started without --secure wants none.
-        self.client = Letta(base_url=self.base_url, max_retries=0, timeout=120.0)
-        try:
-            self.client.health()
+            health = self.http.get("/v1/health/")
+            health.raise_for_status()
+            version = str(health.json().get("version") or "unknown")
         except Exception as e:
             raise RuntimeError(
-                f"no Letta server at {self.base_url}: {e}. Start one with "
-                "'pip install letta==0.16.8' then 'letta server --port 8283', or point "
-                "LETTA_BASE_URL at one that is already running."
+                f"no Letta server at {self.base_url}: {e}. The top of this file has the "
+                "commands to start one, or point LETTA_BASE_URL at one already running."
             ) from e
 
+        parts = re.findall(r"\d+", version)[:2]
+        if len(parts) == 2 and tuple(int(p) for p in parts) > LAST_SQLITE_RELEASE:
+            raise RuntimeError(
+                f"this server is Letta {version}, and the routes below are the 0.11.x ones. "
+                "From 0.12.0 archival memory became /passages and Postgres became "
+                "mandatory. Run 0.11.7, or update the three calls in this adapter and "
+                "point the server at a Postgres."
+            )
+
+        self.version = f"letta server {version}"
+        self.config_notes = self._notes(version)
         # started after the health check so a missing server fails on the clear
         # error rather than after a model load
         self._embed_url = self._embeddings.start()
 
     def teardown(self) -> None:
         self._drop_agent()
-        if self.client:
-            self.client.close()
-            self.client = None
+        if self.http:
+            self.http.close()
+            self.http = None
         self._embeddings.stop()
 
     def reset(self, run_key: str) -> None:
         self._drop_agent()
-        # The suffix keeps a resumed run from being confused with the attempt it
-        # is replacing, since run_key is stable across resumes.
-        agent = self.client.agents.create(
-            name=f"membench-{run_key}-{uuid.uuid4().hex[:8]}",
-            description="agent-memory-bench run, safe to delete",
-            model=self.model,
-            embedding_config={
+        r = self.http.post("/v1/agents/", json={
+            # the suffix keeps a resumed run from being confused with the attempt
+            # it is replacing, since run_key is stable across resumes
+            "name": f"membench-{run_key}-{uuid.uuid4().hex[:8]}",
+            "description": "agent-memory-bench run, safe to delete",
+            "model": self.model,
+            "embedding_config": {
                 "embedding_endpoint_type": "openai",
                 "embedding_endpoint": self._embed_url,
                 "embedding_model": self.cfg.embed_model.split("/")[-1],
                 "embedding_dim": self.cfg.embed_dim,
             },
-            # The agent never reasons, so the base toolset is setup cost for nothing.
-            include_base_tools=False,
-            tags=["membench"],
-        )
-        self.agent_id = agent.id
+            # the agent never reasons, so the base toolset is setup cost for nothing
+            "include_base_tools": False,
+            "tags": ["membench"],
+        })
+        if r.status_code >= 400:
+            raise RuntimeError(f"could not create the agent ({r.status_code}): {r.text[:300]}")
+        self.agent_id = r.json()["id"]
 
     def _drop_agent(self) -> None:
-        if not (self.client and self.agent_id):
+        if not (self.http and self.agent_id):
             return
         try:
-            self.client.agents.delete(self.agent_id)
+            self.http.delete(f"/v1/agents/{self.agent_id}")
         except Exception:
             pass  # already gone, or the server was cleared by hand
         self.agent_id = None
@@ -179,7 +187,9 @@ class LettaSystem(MemorySystem):
         # no other system in the table gets.
         body = f"{self.cfg.embed_doc_prefix}{text}" if self._prefixed else text
         with timed() as t:
-            self.client.agents.passages.create(self.agent_id, text=body)
+            r = self.http.post(f"/v1/agents/{self.agent_id}/archival-memory", json={"text": body})
+        if r.status_code >= 400:
+            raise RuntimeError(f"archival insert failed ({r.status_code}): {r.text[:200]}")
         return t[0]
 
     def flush(self, user_key: str) -> None:
@@ -191,14 +201,20 @@ class LettaSystem(MemorySystem):
     def search(self, user_key: str, query: str, k: int) -> SearchResult:
         q = f"{self.cfg.embed_query_prefix}{query}" if self._prefixed else query
         with timed() as t:
-            resp = self.client.agents.passages.search(self.agent_id, query=q, top_k=k)
-        # A result carries id, content, timestamp and tags, and no score.
+            r = self.http.get(
+                f"/v1/agents/{self.agent_id}/archival-memory/search",
+                params={"query": q, "top_k": k},
+            )
+        if r.status_code >= 400:
+            raise RuntimeError(f"archival search failed ({r.status_code}): {r.text[:200]}")
+
+        results = r.json().get("results") or []
         chunks = [
-            Chunk(text=self._strip_prefix(r.content), score=None, source=r.id)
-            for r in resp.results
-            if r.content
+            Chunk(text=self._strip_prefix(item["content"]), score=None, source=None)
+            for item in results[:k]
+            if item.get("content")
         ]
-        return SearchResult(chunks=chunks[:k], latency_s=t[0], raw=None)
+        return SearchResult(chunks=chunks, latency_s=t[0], raw=None)
 
     def _strip_prefix(self, text: str) -> str:
         """The prefix is an artefact of how nomic wants its input and should not
