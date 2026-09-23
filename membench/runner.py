@@ -117,7 +117,8 @@ class Runner:
         summary.ingest_seconds += ingest_s
         summary.ingest_failures += failures
         self._write("ingest", {
-            "system": system.key, "conversation": conv.conversation_id,
+            "system": system.key, "track": system.track,
+            "conversation": conv.conversation_id,
             "turns": len(conv.turns), "seconds": round(ingest_s, 2), "failures": failures,
         })
         print(f"    ingest took {ingest_s / 60:.1f} min ({failures} failures)")

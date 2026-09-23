@@ -326,3 +326,39 @@ def test_two_tracks_of_one_system_do_not_collide_on_resume(tmp_path):
     # and a genuine resume of the same track still skips
     again = Runner(CONFIG, FakeChat(), FakeJudge(), log).run_system(Recommended(), convs)
     assert again.probes == 0
+
+
+def test_two_tracks_never_share_a_results_row(tmp_path):
+    """A row of real numbers under the wrong heading.
+
+    Summaries used to be keyed on the system alone, and the label came from
+    whichever summary line was written last. So when GoodMem's recommended
+    track graded nothing, the baseline's 120 probes were rebuilt into a single
+    row wearing the recommended label: full figures, correct to four
+    significant digits, describing a run that never happened. The baseline row
+    was gone. Nothing about the table looked wrong, which is the whole problem.
+    """
+    from membench.metrics import rebuild_summaries
+
+    log = tmp_path / "probes.jsonl"
+    with open(log, "w", encoding="utf-8") as f:
+        for i in range(3):
+            f.write(json.dumps({
+                "kind": "probe", "ts": 0.0, "system": "goodmem", "track": "baseline",
+                "conversation_id": "c", "probe_id": f"c:{i}", "category": "single-hop",
+                "adversarial": False, "question": "q", "gold": "g", "answer": "g",
+                "correct": True, "by_string": True, "by_judge": True, "disagreed": False,
+                "why": "", "abstained": False, "search_latency_s": 0.01,
+                "answer_latency_s": 0.1, "context_chars": 10, "context_chunks": 1,
+                "memory_tokens": 10, "prompt_tokens": 20,
+            }) + "\n")
+        # written last, and describing nothing: the recommended track never graded
+        f.write(json.dumps({
+            "kind": "summary", "ts": 1.0, "system": "goodmem", "track": "recommended",
+            "label": "GoodMem (recommended config)", "version": "x", "config_notes": "",
+        }) + "\n")
+
+    rows = rebuild_summaries(log)
+    assert len(rows) == 1, "an empty track must not become a row"
+    assert rows[0].track == "baseline"
+    assert rows[0].probes == 3

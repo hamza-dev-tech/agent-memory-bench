@@ -129,11 +129,16 @@ class SystemSummary:
         return d
 
 
-def load_log(path: Path) -> tuple[list[ProbeRecord], list[dict], dict[str, dict]]:
-    """Read a run log back: graded probes, ingest events, and any summaries."""
+def load_log(path: Path) -> tuple[list[ProbeRecord], list[dict], dict[tuple[str, str], dict]]:
+    """Read a run log back: graded probes, ingest events, and any summaries.
+
+    Summaries are keyed by (system, track). One product can appear twice, once
+    at its defaults and once on a configuration its vendor recommends, and the
+    two share a system key.
+    """
     probes: list[ProbeRecord] = []
     ingests: list[dict] = []
-    summaries: dict[str, dict] = {}
+    summaries: dict[tuple[str, str], dict] = {}
     if not path.exists():
         return probes, ingests, summaries
     with open(path, encoding="utf-8") as f:
@@ -149,7 +154,7 @@ def load_log(path: Path) -> tuple[list[ProbeRecord], list[dict], dict[str, dict]
             elif kind == "ingest":
                 ingests.append(row)
             elif kind == "summary":
-                summaries[row.get("system", "")] = row
+                summaries[(row.get("system", ""), row.get("track", ""))] = row
     return probes, ingests, summaries
 
 
@@ -161,21 +166,33 @@ def rebuild_summaries(path: Path) -> list[SystemSummary]:
     be a poor trade. Everything in the table can be recomputed from the log.
     """
     probes, ingests, saved = load_log(path)
-    out: dict[str, SystemSummary] = {}
+    # (system, track), never system alone. Keying on the system merges a
+    # product's two tracks into one row, and the label comes from whichever
+    # summary was written last, so a track that graded nothing can end up
+    # wearing another track's numbers. A row of real figures under the wrong
+    # heading is worse than a missing row, because nothing about it looks wrong.
+    out: dict[tuple[str, str], SystemSummary] = {}
     for r in probes:
-        s = out.get(r.system)
+        key = (r.system, r.track)
+        s = out.get(key)
         if s is None:
-            meta = saved.get(r.system, {})
-            s = out[r.system] = SystemSummary(
+            meta = saved.get(key, {})
+            s = out[key] = SystemSummary(
                 system=r.system,
                 label=meta.get("label") or r.system,
-                track=meta.get("track") or r.track,
+                track=r.track,
                 version=meta.get("version", "unknown"),
                 config_notes=meta.get("config_notes", ""),
             )
         s.add(r)
     for row in ingests:
-        s = out.get(row.get("system", ""))
+        # ingest records written before the track was recorded fall back to the
+        # only track that system has, and are dropped if that is ambiguous
+        key = (row.get("system", ""), row.get("track", ""))
+        s = out.get(key)
+        if s is None:
+            matches = [v for k, v in out.items() if k[0] == row.get("system", "")]
+            s = matches[0] if len(matches) == 1 else None
         if s:
             s.ingest_turns += row.get("turns", 0)
             s.ingest_seconds += row.get("seconds", 0.0)
