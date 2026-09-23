@@ -362,3 +362,33 @@ def test_two_tracks_never_share_a_results_row(tmp_path):
     assert len(rows) == 1, "an empty track must not become a row"
     assert rows[0].track == "baseline"
     assert rows[0].probes == 3
+
+
+def test_only_summarisation_being_off_is_a_benign_goodmem_status():
+    """GoodMem reports through status events, not exceptions, so the call can
+    succeed while the measurement is void.
+
+    Treating every status as fatal killed all 120 probes of the recommended
+    track over a notice that summarisation was off, which is exactly how this
+    harness is meant to be configured. Treating none as fatal is far worse:
+    RERANKING_FAILED is the whole difference between GoodMem's two tracks, so
+    chunks arriving after it would be baseline retrieval published under a
+    heading that says recommended.
+    """
+    from membench.adapters.goodmem import _is_benign
+
+    class S:
+        def __init__(self, code, details=None):
+            self.code, self.details, self.message = code, details or {}, "m"
+
+    assert _is_benign(S("FEATURE_DISABLED", {"feature": "summarization"}))
+    assert _is_benign(S("LLM_CAPABILITY_INFERRED"))
+
+    assert not _is_benign(S("RERANKING_FAILED"))
+    assert not _is_benign(S("VECTOR_SEARCH_PARTIAL"))
+    assert not _is_benign(S("EMBEDDER_FAILED"))
+    assert not _is_benign(S("RATE_LIMITED"))
+    # a disabled feature that is not summarisation changes what is measured
+    assert not _is_benign(S("FEATURE_DISABLED", {"feature": "reranking"}))
+    # and anything nobody has classified stops the run
+    assert not _is_benign(S("SOME_CODE_ADDED_NEXT_RELEASE"))

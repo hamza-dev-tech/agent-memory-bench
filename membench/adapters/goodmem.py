@@ -36,6 +36,36 @@ def _batched(items: list[str], size: int):
         yield items[i : i + size]
 
 
+# Retrieval reports itself through status events rather than exceptions, and
+# most of them are fatal to a measurement even though the call returned. Only
+# these two are not, so this is a whitelist: a code nobody has classified stops
+# the run rather than quietly shrinking a recall number.
+#
+# The one worth naming is RERANKING_FAILED. The reranker is the entire
+# difference between the two GoodMem tracks, so if it fails and the chunks come
+# back anyway, the recommended row would be baseline retrieval published under
+# a heading that says otherwise.
+_BENIGN_STATUS = {
+    # summarisation is deliberately off: the harness grades retrieved text, so
+    # letting GoodMem write the answer is the one thing it must not do
+    "FEATURE_DISABLED",
+    "LLM_CAPABILITY_INFERRED",
+}
+
+
+def _is_benign(status) -> bool:
+    code = str(getattr(status, "code", "") or "")
+    if code not in _BENIGN_STATUS:
+        return False
+    if code == "FEATURE_DISABLED":
+        # only summarisation is allowed to be the disabled feature; anything
+        # else being off is a change to what is being measured
+        details = getattr(status, "details", None) or {}
+        feature = str(details.get("feature", "")).lower()
+        return "summar" in feature or "abstract" in feature
+    return True
+
+
 class GoodMemSystem(MemorySystem):
     key = "goodmem"
 
@@ -153,8 +183,9 @@ class GoodMemSystem(MemorySystem):
 
         chunks: list[Chunk] = []
         for e in events:
-            if getattr(e, "status", None):
-                raise RuntimeError(e.status.message)
+            status = getattr(e, "status", None)
+            if status is not None and not _is_benign(status):
+                raise RuntimeError(f"{getattr(status, 'code', '?')}: {status.message}")
             item = getattr(e, "retrieved_item", None)
             if not item:
                 continue
