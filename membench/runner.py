@@ -19,7 +19,7 @@ from .adapters.base import MemorySystem
 from .config import Config
 from .dataset import Conversation
 from .judge import Judge
-from .llm import Chat, ANSWER_SYSTEM, answer_prompt
+from .llm import ANSWER_SYSTEM, Chat, answer_prompt
 from .metrics import ProbeRecord, SystemSummary, approx_tokens
 
 

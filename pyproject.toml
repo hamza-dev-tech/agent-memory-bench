@@ -1,0 +1,28 @@
+[project]
+name = "agent-memory-bench"
+version = "0.1.0"
+description = "Reproducible benchmark for agent memory systems, graded on what they retrieve"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Malik Hamza Shabbir", email = "hamzadevtech01@gmail.com" }]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+  "E501",   # long lines are usually a doc URL worth keeping intact
+  "B027",   # setup/flush/teardown are optional hooks, not abstract by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+# both put the repo on sys.path before importing from it
+"scripts/*" = ["E402"]
+"tests/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

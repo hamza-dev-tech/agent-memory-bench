@@ -28,6 +28,12 @@ from .base import Chunk, MemorySystem, SearchResult, timed
 
 POLL_INTERVAL_S = 1.0
 INDEX_TIMEOUT_S = 900
+BATCH_SIZE = 100
+
+
+def _batched(items: list[str], size: int):
+    for i in range(0, len(items), size):
+        yield items[i : i + size]
 
 
 class GoodMemSystem(MemorySystem):
@@ -67,9 +73,15 @@ class GoodMemSystem(MemorySystem):
             self.client = None
 
     def reset(self, run_key: str) -> None:
-        for mid in self._written:
+        if not self._written:
+            return
+        from goodmem.models import BatchDeleteMemorySelectorRequest
+
+        for batch in _batched(self._written, BATCH_SIZE):
             try:
-                self.client.memories.delete(id=mid)
+                self.client.memories.batch_delete(
+                    requests=[BatchDeleteMemorySelectorRequest(memory_id=m) for m in batch]
+                )
             except Exception:
                 pass  # already gone, or the space was cleared by hand
         self._written = []
@@ -93,18 +105,26 @@ class GoodMemSystem(MemorySystem):
         """Wait for server-side chunking and embedding to finish.
 
         Checking the last write only would be wrong: these are queued and can
-        complete out of order.
+        complete out of order. Polling one id at a time would be several hundred
+        round trips per conversation, so this asks in batches and only re-asks
+        about the ones still working.
         """
         deadline = time.monotonic() + INDEX_TIMEOUT_S
         pending = list(self._written)
         while pending and time.monotonic() < deadline:
             still: list[str] = []
-            for mid in pending:
-                m = self.client.memories.get(id=mid)
-                if m.processing_status == "FAILED":
-                    raise RuntimeError(f"GoodMem failed to index {mid}")
-                if m.processing_status != "COMPLETED":
-                    still.append(mid)
+            for batch in _batched(pending, BATCH_SIZE):
+                for result in self.client.memories.batch_get(memory_ids=batch).results:
+                    memory = result.memory
+                    if not result.success or memory is None:
+                        # a read that failed says nothing about indexing, so ask again
+                        if result.memory_id:
+                            still.append(result.memory_id)
+                        continue
+                    if memory.processing_status == "FAILED":
+                        raise RuntimeError(f"GoodMem failed to index {memory.memory_id}")
+                    if memory.processing_status != "COMPLETED":
+                        still.append(memory.memory_id)
             pending = still
             if pending:
                 time.sleep(POLL_INTERVAL_S)

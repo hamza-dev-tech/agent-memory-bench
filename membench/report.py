@@ -36,6 +36,13 @@ def write(cfg: Config, summaries: list[SystemSummary], dataset_info: dict, out_d
 
     rows = [s.row() for s in summaries]
     disagreements = sum(s.judge_disagreements for s in summaries)
+    convs = dataset_info.get("conversations", 0)
+    cut = dataset_info.get("truncated_to_turns")
+    truncated = (
+        f"\n**Smoke run.** Conversations were cut to {cut} turns, so recall here means nothing.\n"
+        if cut
+        else ""
+    )
     md = f"""# Results
 
 Run `{cfg.run_id}`, {stamp}.
@@ -63,12 +70,12 @@ Run `{cfg.run_id}`, {stamp}.
 - Answering model: `{cfg.llm_model}` at temperature {cfg.llm_temperature}, same for every system.
 - Embeddings: `{cfg.embed_model}`, run locally for the self-hosted systems and on
   the vendor's own hosting for GoodMem. Same model, different host.
-- Workload: {dataset_info.get('conversations')} LoCoMo conversations,
+- Workload: {convs} LoCoMo {"conversation" if convs == 1 else "conversations"},
   {dataset_info.get('turns')} turns, {dataset_info.get('probes')} probes
   ({dataset_info.get('probes_by_category')}).
 - Retrieval depth: top {cfg.top_k} for every system.
-
-{disagreements} probe(s) needed a human look.
+{truncated}
+{disagreements} {"probe" if disagreements == 1 else "probes"} needed a human look.
 
 Raw per-probe records are in `probes.jsonl`; every number above can be recomputed from it.
 """

@@ -7,7 +7,6 @@ text so the report can state real token counts instead of guesses.
 """
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 

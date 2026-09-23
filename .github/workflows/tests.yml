@@ -1,0 +1,21 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  offline:
+    # Only the tests that need no API key and no memory system installed. The
+    # benchmark itself cannot run in CI: it needs a model key and hours.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest ruff
+      - run: python scripts/fetch_locomo.py
+      - run: ruff check .
+      - run: python -m pytest tests -q

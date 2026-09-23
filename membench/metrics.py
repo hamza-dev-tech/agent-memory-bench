@@ -1,8 +1,10 @@
 """Per-probe records and the aggregation behind the results table."""
 from __future__ import annotations
 
+import json
 import statistics
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 
 def pct(n: int, d: int) -> float:
@@ -97,7 +99,9 @@ class SystemSummary:
                 self.correct += 1
 
     def row(self) -> dict:
-        med = lambda xs: int(statistics.median(xs)) if xs else 0
+        def med(xs):
+            return int(statistics.median(xs)) if xs else 0
+
         return {
             "System": self.label,
             "Track": self.track,
@@ -123,3 +127,57 @@ class SystemSummary:
             "median_prompt_tokens": int(statistics.median(self.prompt_tokens)) if self.prompt_tokens else 0,
         }
         return d
+
+
+def load_log(path: Path) -> tuple[list[ProbeRecord], list[dict], dict[str, dict]]:
+    """Read a run log back: graded probes, ingest events, and any summaries."""
+    probes: list[ProbeRecord] = []
+    ingests: list[dict] = []
+    summaries: dict[str, dict] = {}
+    if not path.exists():
+        return probes, ingests, summaries
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # a run killed mid-write leaves one short line
+            kind = row.pop("kind", None)
+            row.pop("ts", None)
+            if kind == "probe":
+                probes.append(ProbeRecord(**row))
+            elif kind == "ingest":
+                ingests.append(row)
+            elif kind == "summary":
+                summaries[row.get("system", "")] = row
+    return probes, ingests, summaries
+
+
+def rebuild_summaries(path: Path) -> list[SystemSummary]:
+    """Summaries from the log alone.
+
+    A run that was interrupted never returns its in-memory summary, and losing
+    six hours of grading because the table is built from the wrong place would
+    be a poor trade. Everything in the table can be recomputed from the log.
+    """
+    probes, ingests, saved = load_log(path)
+    out: dict[str, SystemSummary] = {}
+    for r in probes:
+        s = out.get(r.system)
+        if s is None:
+            meta = saved.get(r.system, {})
+            s = out[r.system] = SystemSummary(
+                system=r.system,
+                label=meta.get("label") or r.system,
+                track=meta.get("track") or r.track,
+                version=meta.get("version", "unknown"),
+                config_notes=meta.get("config_notes", ""),
+            )
+        s.add(r)
+    for row in ingests:
+        s = out.get(row.get("system", ""))
+        if s:
+            s.ingest_turns += row.get("turns", 0)
+            s.ingest_seconds += row.get("seconds", 0.0)
+            s.ingest_failures += row.get("failures", 0)
+    return list(out.values())

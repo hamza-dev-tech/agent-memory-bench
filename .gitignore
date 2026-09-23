@@ -1,5 +1,6 @@
 data/*.json
-results/
+results/*
+!results/.gitkeep
 .venv/
 venv/
 __pycache__/

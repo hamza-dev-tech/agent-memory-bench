@@ -19,7 +19,7 @@ from membench import dataset, report
 from membench.config import CONFIG
 from membench.judge import Judge
 from membench.llm import Chat
-from membench.metrics import ProbeRecord
+from membench.metrics import load_log, rebuild_summaries
 from membench.runner import Runner
 
 
@@ -75,21 +75,19 @@ def main() -> int:
     chat, judge = Chat(cfg), Judge(cfg)
     runner = Runner(cfg, chat, judge, out_dir / "probes.jsonl")
 
-    summaries = []
-    for name in args.systems:
-        system = build_system(name, cfg)
-        try:
-            summaries.append(runner.run_system(system, convs))
-        except Exception as e:
-            print(f"!! {name} failed: {e}")
+    try:
+        for name in args.systems:
+            try:
+                runner.run_system(build_system(name, cfg), convs)
+            except Exception as e:
+                # one system that will not start should not cost the others
+                print(f"!! {name} failed: {e}")
+    except KeyboardInterrupt:
+        print("interrupted, writing what has been graded so far")
 
-    records = []
-    with open(out_dir / "probes.jsonl", encoding="utf-8") as f:
-        for line in f:
-            r = json.loads(line)
-            if r.get("kind") == "probe":
-                r.pop("kind", None), r.pop("ts", None)
-                records.append(ProbeRecord(**r))
+    log = out_dir / "probes.jsonl"
+    summaries = rebuild_summaries(log)
+    records, _, _ = load_log(log)
 
     path = report.write(cfg, summaries, info, out_dir)
     review = report.write_review_csv(records, out_dir)
