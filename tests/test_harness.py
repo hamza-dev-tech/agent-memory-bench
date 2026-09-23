@@ -147,3 +147,53 @@ def test_resume_skips_graded_probes(tmp_path):
 def test_token_estimate_is_monotonic():
     assert approx_tokens("") == 0
     assert approx_tokens("a" * 400) > approx_tokens("a" * 40)
+
+
+def test_embed_server_speaks_openai(monkeypatch):
+    """The endpoint Letta is pointed at, with the model stubbed out.
+
+    Loading nomic here would turn a fast test file into a 500MB download, and
+    what is worth checking is the HTTP shape, not the arithmetic.
+    """
+    import json
+    import urllib.request
+
+    from membench import embed_server
+
+    class StubEmbedder:
+        def __init__(self, cfg, prefixes=True):
+            self.seen = []
+
+        def warmup(self):
+            pass
+
+        def embed_documents(self, texts):
+            self.seen.extend(texts)
+            return [[float(len(t)), 0.5] for t in texts]
+
+    monkeypatch.setattr(embed_server, "LocalEmbedder", StubEmbedder)
+    server = embed_server.EmbedServer(CONFIG)
+    url = server.start()
+    try:
+        req = urllib.request.Request(
+            f"{url}/embeddings",
+            data=json.dumps({"input": ["one", "three"], "model": "x"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            body = json.load(r)
+
+        assert [d["index"] for d in body["data"]] == [0, 1]
+        assert body["data"][0]["embedding"] == [3.0, 0.5]
+        assert body["object"] == "list"
+
+        # a bare string is the other half of the OpenAI schema
+        req = urllib.request.Request(
+            f"{url}/embeddings",
+            data=json.dumps({"input": "seven!!"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            assert len(json.load(r)["data"]) == 1
+    finally:
+        server.stop()

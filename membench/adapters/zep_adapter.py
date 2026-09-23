@@ -166,7 +166,16 @@ class ZepGraphitiSystem(MemorySystem):
 
         self._db.parent.mkdir(parents=True, exist_ok=True)
         # a file rather than ':memory:', so a run that dies leaves a graph to look at
-        return KuzuDriver(db=str(self._db))
+        driver = KuzuDriver(db=str(self._db))
+        # GraphDriver declares _database but only the Neo4j and FalkorDB drivers
+        # assign it, so the first call that carries a group_id dies on
+        # AttributeError inside graphiti. Kuzu is one embedded file and its
+        # clone() returns self, so the attribute is only ever compared against;
+        # the empty string is what get_default_group_id returns for this
+        # provider. Group ids still scope the nodes.
+        if not hasattr(driver, "_database"):
+            driver._database = ""
+        return driver
 
     def _run(self, coro):
         """Graphiti is async and the harness is not. One loop for the whole run,

@@ -1,7 +1,7 @@
 # harness
 httpx>=0.27
 torch>=2.2                # CPU build is enough: pip install torch --index-url https://download.pytorch.org/whl/cpu
-transformers>=4.44
+transformers>=4.44,<5    # nomic's model code calls get_extended_attention_mask, gone in 5.x
 einops>=0.7               # nomic-embed-text ships custom model code that needs it
 pytest>=8.0               # tests/ only
 

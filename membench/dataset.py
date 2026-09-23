@@ -105,8 +105,18 @@ def build(
     n_probes: int,
     n_adversarial: int,
     seed: int,
+    max_turns: int = 0,
 ) -> list[Conversation]:
-    """Deterministic selection: same seed, same conversations, same probes."""
+    """Deterministic selection: same seed, same conversations, same probes.
+
+    max_turns is for smoke tests. It cuts each conversation short, and the
+    probes are then drawn from what the shortened conversation can actually
+    answer. Cutting the turns and leaving the probes alone is how a smoke run
+    comes back all misses: the evidence for most questions sits in a later
+    session, so the run proves nothing except that the code did not crash.
+    LoCoMo tags every question with the dia_ids it rests on, which is what
+    makes the narrower pool possible.
+    """
     raw = load_locomo(path)
     rng = random.Random(seed)
 
@@ -139,6 +149,17 @@ def build(
                 )
 
         qa = conv.get("qa", [])
+        if max_turns:
+            turns = turns[:max_turns]
+            in_window = {t.dia_id for t in turns}
+            # adversarial questions carry no evidence and survive any cut: the
+            # right answer is a refusal, which a short conversation can give
+            qa = [
+                q for q in qa
+                if q.get("category") == ADVERSARIAL_CATEGORY
+                or (q.get("evidence") and in_window.issuperset(q["evidence"]))
+            ]
+
         normal = [q for q in qa if q.get("category") != ADVERSARIAL_CATEGORY and q.get("answer") is not None]
         adversarial = [q for q in qa if q.get("category") == ADVERSARIAL_CATEGORY]
         rng.shuffle(normal)

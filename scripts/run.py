@@ -61,11 +61,17 @@ def main() -> int:
     cfg.conversations, cfg.probes = args.conversations, args.probes
     cfg.adversarial_probes, cfg.top_k, cfg.run_id = args.adversarial, args.top_k, args.run_id
 
-    convs = dataset.build(cfg.dataset_path, cfg.conversations, cfg.probes, cfg.adversarial_probes, cfg.seed)
+    convs = dataset.build(
+        cfg.dataset_path, cfg.conversations, cfg.probes, cfg.adversarial_probes,
+        cfg.seed, max_turns=args.max_turns,
+    )
     if args.max_turns:
-        for c in convs:
-            c.turns = c.turns[: args.max_turns]
         print(f"!! smoke mode: {args.max_turns} turns per conversation, numbers are not comparable")
+        if not any(c.probes for c in convs):
+            raise SystemExit(
+                "no probe in the dataset can be answered from the first "
+                f"{args.max_turns} turns. Raise --max-turns."
+            )
     info = dataset.summarise(convs)
     info["truncated_to_turns"] = args.max_turns or None
     print("workload:", json.dumps(info))

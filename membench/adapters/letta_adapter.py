@@ -11,19 +11,24 @@ Things a copier will trip over:
 
       pip install "letta==0.16.8"
       set GROQ_API_KEY=...                            resolves the model handle
-      set OLLAMA_BASE_URL=http://localhost:11434      resolves the embedding handle
-      ollama pull nomic-embed-text
       letta server --port 8283
 
   Pin that version. The `letta` name on PyPI is now Letta Code, a terminal agent
   that installs its own `letta` command and contains no REST server; 0.16.8 is
   the last release that still carries `letta server`. It listens on
   http://localhost:8283, and LETTA_BASE_URL points this adapter somewhere else.
-* Both handles are resolved when the agent is created and a miss is fatal, so
-  the server has to have been started with those two environment variables set.
-  Letta registers models as "<provider>/<model id>" and looks the handle up by
-  exact string, which is why the Ollama handle keeps the ":latest" tag Ollama
-  reports on /api/tags.
+* The model handle is resolved when the agent is created and a miss is fatal,
+  so the server has to have been started with GROQ_API_KEY set. Letta registers
+  models as "<provider>/<model id>" and looks the handle up by exact string,
+  and Groq's own id already contains a slash, so the handle has two.
+* Embeddings are the awkward part. Letta computes them inside its own server
+  process, so it cannot be handed the shared LocalEmbedder object. Passing a
+  handle like ollama/nomic-embed-text would put it on a different build of the
+  model than everything else, which quietly turns the results table into a
+  comparison of two embedders as well as five memory systems. Instead the
+  harness serves the exact shared weights on a local endpoint and the agent is
+  created with an embedding_config pointing at it: same weights, same width,
+  same prefixes as the GoodMem baseline. See membench/embed_server.py.
 * The agent is never messaged. Sending a turn as a message would hand the
   decision about what is worth remembering to the agent's own LLM, and reading
   the reply back would be Letta writing the answer instead of the shared model.
@@ -45,6 +50,7 @@ from __future__ import annotations
 import os
 import uuid
 
+from ..embed_server import EmbedServer
 from .base import Chunk, MemorySystem, SearchResult, timed
 
 DEFAULT_BASE_URL = "http://localhost:8283"
@@ -60,18 +66,15 @@ class LettaSystem(MemorySystem):
         self.client = None
         self.agent_id: str | None = None
         self.base_url = os.environ.get("LETTA_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+        self._embeddings = EmbedServer(cfg)
+        self._embed_url = ""
 
         # Groq's own id for this model already contains a slash, so the handle
         # comes out with two of them. That is what the server stores.
         self.model = os.environ.get("LETTA_MODEL", f"groq/{cfg.llm_model}")
-        # Letta embeds archival passages itself, so the shared LocalEmbedder
-        # cannot be handed to it. The closest honest match is the same weights
-        # served by Ollama; anything else here and the run is off the shared
-        # embedder and the results table has to say so.
-        self.embedding = os.environ.get("LETTA_EMBEDDING", "ollama/nomic-embed-text:latest")
-        # nomic is asymmetric and neither Letta nor Ollama adds the prefixes,
-        # so we add them here exactly as the GoodMem baseline does.
-        self._prefixed = "nomic" in self.embedding.lower()
+        # nomic is asymmetric and nothing downstream adds the prefixes, so the
+        # adapter adds them here exactly as the GoodMem baseline does.
+        self._prefixed = "nomic" in cfg.embed_model.lower()
 
         # The runner reads version and config_notes before setup() runs, so both
         # have to resolve without touching the server.
@@ -84,9 +87,10 @@ class LettaSystem(MemorySystem):
         self.config_notes = (
             f"self-hosted server at {self.base_url}, archival memory only. Turns go in with "
             f"passages.create and come back with passages.search; the agent is never messaged, "
-            f"so nothing it generates reaches the grader. Embeddings are {self.embedding}, "
-            f"computed on the server rather than by the harness's own copy of the weights. Agent "
-            f"model handle {self.model}, needed to create the agent and unused for retrieval. "
+            f"so nothing it generates reaches the grader. Embeddings are {cfg.embed_model}, the "
+            f"shared weights, served to the Letta server over a local endpoint because it embeds "
+            f"in process. Agent model handle {self.model}, needed to create the agent and unused "
+            f"for retrieval. "
             f"Archival search is embedding similarity and returns no scores."
         )
 
@@ -116,11 +120,16 @@ class LettaSystem(MemorySystem):
                 "LETTA_BASE_URL at one that is already running."
             ) from e
 
+        # started after the health check so a missing server fails on the clear
+        # error rather than after a model load
+        self._embed_url = self._embeddings.start()
+
     def teardown(self) -> None:
         self._drop_agent()
         if self.client:
             self.client.close()
             self.client = None
+        self._embeddings.stop()
 
     def reset(self, run_key: str) -> None:
         self._drop_agent()
@@ -130,7 +139,12 @@ class LettaSystem(MemorySystem):
             name=f"membench-{run_key}-{uuid.uuid4().hex[:8]}",
             description="agent-memory-bench run, safe to delete",
             model=self.model,
-            embedding=self.embedding,
+            embedding_config={
+                "embedding_endpoint_type": "openai",
+                "embedding_endpoint": self._embed_url,
+                "embedding_model": self.cfg.embed_model.split("/")[-1],
+                "embedding_dim": self.cfg.embed_dim,
+            },
             # The agent never reasons, so the base toolset is setup cost for nothing.
             include_base_tools=False,
             tags=["membench"],
