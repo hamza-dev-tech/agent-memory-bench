@@ -5,28 +5,39 @@ Qdrant in local mode, which qdrant-client embeds and which mem0 already lists
 as a hard dependency, so running this costs no extra install. State is a
 directory on disk.
 
-Four things worth knowing if you copy this adapter:
+Things a copier will trip over:
 
 * Mem0 is not somewhere you put text. Every add() hands the turn to an LLM that
   decides which facts to keep and whether each one adds to, updates or
-  contradicts something stored, so one turn is one or more model calls. That is
-  most of the ingest-per-turn number, so nothing here batches, defers or
-  threads writes to make the column look smaller.
+  contradicts something already stored, so a turn costs at least one model
+  call. That is most of the ingest-per-turn number, so nothing here batches,
+  defers or threads writes to make the column look smaller. The extraction call
+  asks for a JSON object back; Groq serves json_object mode on every model it
+  hosts, so the shared endpoint is enough for it.
 * search() changed shape between releases. Through 0.1.x the entity went in as
   user_id=... with a limit=... cap; from 2.x both live in filters={"user_id":
   ...} with top_k=..., and passing user_id at the top level now raises
-  ValueError. requirements.txt says mem0ai>=0.1.50, which resolves to either,
-  so the call below binds to whatever signature is installed rather than to a
+  ValueError. add() and delete_all() kept their top-level user_id in both.
+  requirements.txt floors mem0ai at 0.1.50 and a fresh install lands on 2.1.0,
+  so the call below binds to whichever signature is installed rather than to a
   guess about the version. https://docs.mem0.ai/migration/oss-v2-to-v3
 * Mem0 owns its embedding calls, so the "search_document: " and "search_query:
   " prefixes nomic-embed-text-v1.5 expects are not applied here the way the
-  GoodMem adapter applies them. Injecting them would mean tuning one system and
-  not the others. Same weights, no prefixes, and the write-up says so.
+  GoodMem and Letta adapters apply them. Injecting them would mean tuning one
+  system and not the others. Same weights, no prefixes, and the write-up says so.
+* The openai provider drops the base url you configured if OPENROUTER_API_KEY
+  is set in the environment, which would run mem0 against a different endpoint
+  than everything else in the table without saying anything. setup() refuses to
+  start in that case.
 * Local Qdrant locks its directory, so two runs pointed at the same path will
   not both start. Override the location with MEMBENCH_MEM0_DIR.
 
-Config shape and the provider keys used below:
-https://docs.mem0.ai/open-source/python-quickstart
+Argument names checked against the 2.x sources, since the docs do not spell all
+of them out:
+  https://github.com/mem0ai/mem0/blob/main/mem0/llms/openai.py
+  https://github.com/mem0ai/mem0/blob/main/mem0/embeddings/huggingface.py
+  https://github.com/mem0ai/mem0/blob/main/mem0/vector_stores/qdrant.py
+  https://docs.mem0.ai/open-source/configuration
 """
 from __future__ import annotations
 
@@ -35,6 +46,25 @@ import os
 from pathlib import Path
 
 from .base import Chunk, MemorySystem, SearchResult, timed
+
+
+def _memory_class():
+    """Import mem0 late, and not before telemetry is off.
+
+    mem0.memory.telemetry reads MEM0_TELEMETRY once, at import, so setting it
+    afterwards does nothing. posthog fires on every operation and its network
+    time would land in the latency column.
+    """
+    os.environ.setdefault("MEM0_TELEMETRY", "false")
+    try:
+        from mem0 import Memory
+    except ImportError as e:
+        raise RuntimeError(
+            "mem0 is not installed. Run: pip install 'mem0ai>=2.0'. It pulls "
+            "qdrant-client in with it, so the local vector store needs nothing "
+            f"else. Failed on: {e}"
+        ) from e
+    return Memory
 
 
 class Mem0System(MemorySystem):
@@ -50,20 +80,31 @@ class Mem0System(MemorySystem):
         self._dir = Path(override) if override else Path(cfg.results_dir) / cfg.run_id / "mem0"
         self.config_notes = (
             f"self-hosted in process, qdrant local mode, {cfg.embed_model} via "
-            f"sentence-transformers, {cfg.llm_model} for fact extraction, no reranker, "
-            "nomic prefixes not applied because mem0 embeds internally"
+            f"sentence-transformers, {cfg.llm_model} for fact extraction at mem0's own "
+            f"token cap, no reranker, nomic prefixes not applied because mem0 embeds "
+            f"internally"
         )
+        # the runner reads version off the system before setup() runs
+        try:
+            from importlib.metadata import version
+            self.version = f"mem0ai {version('mem0ai')}"
+        except Exception:
+            self.version = "mem0ai unknown"
 
     # -- lifecycle ---------------------------------------------------------------
 
     def setup(self) -> None:
-        from mem0 import Memory  # imported late so the package stays optional
+        Memory = _memory_class()
 
-        # posthog fires on every operation and would land in the latency column
-        os.environ.setdefault("MEM0_TELEMETRY", "false")
+        if os.environ.get("OPENROUTER_API_KEY"):
+            raise RuntimeError(
+                "OPENROUTER_API_KEY is set. mem0's openai provider prefers it over the "
+                "base url configured here, so mem0 would extract memories on a different "
+                "endpoint than every other system in the table. Unset it for the run."
+            )
+
         self._dir.mkdir(parents=True, exist_ok=True)
-
-        self.mem = Memory.from_config({
+        config = {
             "vector_store": {
                 "provider": "qdrant",
                 "config": {
@@ -101,15 +142,19 @@ class Mem0System(MemorySystem):
                 },
             },
             "history_db_path": str(self._dir / "history.db"),
-        })
+        }
 
-        # read once; search() is called per probe and signature work is not free
-        self._search_params = set(inspect.signature(self.mem.search).parameters)
         try:
-            from importlib.metadata import version
-            self.version = f"mem0ai {version('mem0ai')}"
-        except Exception:
-            self.version = "mem0ai unknown"
+            self.mem = Memory.from_config(config)
+        except Exception as e:
+            raise RuntimeError(
+                f"mem0 would not start on {self._dir}: {e}. If another run is using "
+                "that path, the local Qdrant still holds the directory lock; point "
+                "MEMBENCH_MEM0_DIR somewhere else."
+            ) from e
+
+        # read once; search() runs per probe and signature work is not free
+        self._search_params = set(inspect.signature(self.mem.search).parameters)
 
     def teardown(self) -> None:
         # local qdrant keeps the directory locked until its client is closed, so
@@ -158,11 +203,13 @@ class Mem0System(MemorySystem):
         else:
             kwargs["filters"] = {"user_id": user_key}  # 2.x and later
         kwargs["top_k" if "top_k" in self._search_params else "limit"] = k
+        # rerank defaults to False in 2.x and there is no reranker in the config,
+        # so this is mem0's plain vector search, as the baseline track wants
 
         with timed() as t:
             found = self.mem.search(query, **kwargs)
 
-        # 0.1.x returned a bare list before settling on {"results": [...]}
+        # 0.1.x on an older config version returned a bare list
         items = found.get("results", []) if isinstance(found, dict) else (found or [])
         chunks = [
             Chunk(text=it["memory"], score=it.get("score"), source=it.get("id"))
