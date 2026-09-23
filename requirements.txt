@@ -1,8 +1,13 @@
 # harness
 httpx>=0.27
-sentence-transformers>=3.0
+torch>=2.2                # CPU build is enough: pip install torch --index-url https://download.pytorch.org/whl/cpu
+transformers>=4.44
 einops>=0.7               # nomic-embed-text ships custom model code that needs it
 pytest>=8.0               # tests/ only
+
+# Deliberately NOT sentence-transformers. It imports sklearn.metrics, whose
+# compiled extension is blocked by Application Control on some Windows
+# machines, and transformers does the same job here in twenty lines.
 
 # memory systems under test. Install what you plan to run, not all of them.
 goodmem==0.1.34           # hosted; no local services
@@ -10,5 +15,6 @@ mem0ai>=2.0,<3            # brings qdrant-client; runs in process
 langmem>=0.0.30           # needs langgraph>=0.6 and langchain-openai
 langgraph>=0.6
 langchain-openai>=0.2
+langchain>=0.3            # mem0's langchain embedder provider imports from it
 graphiti-core[kuzu]>=0.7  # kuzu is embedded, so no graph server to run
 letta-client>=1.0         # talks to a local Letta server, see the adapter docstring

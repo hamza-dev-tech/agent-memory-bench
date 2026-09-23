@@ -29,7 +29,7 @@ time per turn.
 | System | How it runs |
 | --- | --- |
 | Mem0 | open source, self-hosted |
-| Letta | open source, self-hosted |
+| Letta | open source, self-hosted server plus Ollama for its embeddings |
 | LangMem | open source, in process |
 | Zep (Graphiti) | open source engine, self-hosted |
 | GoodMem | hosted instance provided by the vendor |
@@ -42,7 +42,7 @@ as a separate row.
 ## Models
 
 - Answering and judging: `openai/gpt-oss-120b` through Groq, temperature 0.
-- Embeddings: `nomic-embed-text-v1.5`, locally via sentence-transformers for the
+- Embeddings: `nomic-embed-text-v1.5`, run locally through transformers for the
   self-hosted systems and on the vendor's hosting for GoodMem. Same weights,
   different host, noted in the results.
 
@@ -54,6 +54,9 @@ whole run costs nothing.
 ## Running it
 
 ```bash
+python -m venv .venv
+.venv/Scripts/activate            # source .venv/bin/activate on POSIX
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python scripts/fetch_locomo.py
 
@@ -75,6 +78,15 @@ Output lands in `results/<run-id>/`:
 - `RESULTS.md` - the table.
 - `review.csv` - probes where the LLM judge and the string match disagreed.
   Read these by hand before publishing anything.
+
+## A note on the environment
+
+Install into a virtualenv and leave scikit-learn out of it. transformers only
+imports sklearn when it is present, and on a Windows machine with Application
+Control enabled, sklearn's compiled `_pairwise_distances_reduction` extension is
+blocked, which takes transformers and anything built on it down with it. That is
+also why the embedder here talks to transformers directly instead of using
+sentence-transformers.
 
 ## Grading
 

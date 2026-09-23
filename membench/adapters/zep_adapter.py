@@ -135,7 +135,7 @@ class ZepGraphitiSystem(MemorySystem):
 
         self.config_notes = (
             f"self-hosted on {self.backend}, entity extraction with {cfg.llm_model} via Groq, "
-            f"{cfg.embed_model} via sentence-transformers, stock EDGE_HYBRID_SEARCH_RRF, "
+            f"{cfg.embed_model} via transformers, stock EDGE_HYBRID_SEARCH_RRF, "
             "no reranker"
         )
 

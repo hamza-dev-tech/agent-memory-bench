@@ -21,10 +21,14 @@ Things a copier will trip over:
   requirements.txt floors mem0ai at 0.1.50 and a fresh install lands on 2.1.0,
   so the call below binds to whichever signature is installed rather than to a
   guess about the version. https://docs.mem0.ai/migration/oss-v2-to-v3
-* Mem0 owns its embedding calls, so the "search_document: " and "search_query:
-  " prefixes nomic-embed-text-v1.5 expects are not applied here the way the
-  GoodMem and Letta adapters apply them. Injecting them would mean tuning one
-  system and not the others. Same weights, no prefixes, and the write-up says so.
+* Mem0 owns its embedding calls and hands every text to embed_query, writing or
+  searching alike, so there is no side to attach nomic's asymmetric prefixes to
+  the way the GoodMem and Letta adapters do. It runs without them. Same weights,
+  no prefixes, and the write-up says so.
+* Its huggingface embedder loads the model through sentence-transformers, which
+  will not import on a machine where Application Control blocks sklearn's
+  compiled extensions. The langchain provider takes an Embeddings object
+  instead, which is how the shared embedder gets in.
 * The openai provider drops the base url you configured if OPENROUTER_API_KEY
   is set in the environment, which would run mem0 against a different endpoint
   than everything else in the table without saying anything. setup() refuses to
@@ -35,7 +39,7 @@ Things a copier will trip over:
 Argument names checked against the 2.x sources, since the docs do not spell all
 of them out:
   https://github.com/mem0ai/mem0/blob/main/mem0/llms/openai.py
-  https://github.com/mem0ai/mem0/blob/main/mem0/embeddings/huggingface.py
+  https://github.com/mem0ai/mem0/blob/main/mem0/embeddings/langchain.py
   https://github.com/mem0ai/mem0/blob/main/mem0/vector_stores/qdrant.py
   https://docs.mem0.ai/open-source/configuration
 """
@@ -45,6 +49,7 @@ import inspect
 import os
 from pathlib import Path
 
+from ..embeddings import langchain_embeddings
 from .base import Chunk, MemorySystem, SearchResult, timed
 
 
@@ -79,9 +84,9 @@ class Mem0System(MemorySystem):
         override = os.environ.get("MEMBENCH_MEM0_DIR")
         self._dir = Path(override) if override else Path(cfg.results_dir) / cfg.run_id / "mem0"
         self.config_notes = (
-            f"self-hosted in process, qdrant local mode, {cfg.embed_model} via "
-            f"sentence-transformers, {cfg.llm_model} for fact extraction at mem0's own "
-            f"token cap, no reranker, nomic prefixes not applied because mem0 embeds "
+            f"self-hosted in process, qdrant local mode, {cfg.embed_model} via transformers "
+            f"through mem0's langchain embedder, {cfg.llm_model} for fact extraction at mem0's "
+            f"own token cap, no reranker, nomic prefixes not applied because mem0 embeds "
             f"internally"
         )
         # the runner reads version off the system before setup() runs
@@ -132,13 +137,14 @@ class Mem0System(MemorySystem):
                 },
             },
             "embedder": {
-                "provider": "huggingface",
+                # The huggingface provider would load the model through
+                # sentence-transformers, which cannot import on this machine.
+                # The langchain provider takes an Embeddings instance, so mem0
+                # gets the same weights the other self-hosted systems use.
+                "provider": "langchain",
                 "config": {
-                    "model": self.cfg.embed_model,
+                    "model": langchain_embeddings(self.cfg, prefixes=False),
                     "embedding_dims": self.cfg.embed_dim,
-                    # reaches SentenceTransformer as a kwarg. nomic ships its own
-                    # model class, exactly as LocalEmbedder has to handle.
-                    "model_kwargs": {"trust_remote_code": True},
                 },
             },
             "history_db_path": str(self._dir / "history.db"),

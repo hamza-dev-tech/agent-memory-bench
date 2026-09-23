@@ -30,7 +30,7 @@ class Config:
     llm_max_tokens: int = 256
 
     # nomic-embed-text-v1.5 is what GoodMem's default space runs on Fireworks,
-    # so the local systems run the same weights through sentence-transformers.
+    # so the local systems run the same weights through transformers.
     # The model is asymmetric: documents and queries take different prefixes.
     embed_model: str = _env("MEMBENCH_EMBED", "nomic-ai/nomic-embed-text-v1.5")
     embed_dim: int = 768
