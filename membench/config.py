@@ -25,7 +25,12 @@ class Config:
     # samples is a benchmark that cannot be reproduced.
     llm_model: str = _env("MEMBENCH_LLM", "openai/gpt-oss-120b")
     llm_base_url: str = _env("MEMBENCH_LLM_BASE_URL", "https://api.groq.com/openai/v1")
-    llm_api_key_env: str = "GROQ_API_KEY"
+    # Named rather than hardcoded so moving to another free OpenAI compatible
+    # endpoint is three environment variables and no code. Worth having: mem0's
+    # stock extraction prompt is about 8.5k tokens per turn, which is over the
+    # per-request ceiling on some free tiers, and then the provider is not a
+    # preference but a requirement.
+    llm_api_key_env: str = _env("MEMBENCH_LLM_KEY_ENV", "GROQ_API_KEY")
     llm_temperature: float = 0.0
     llm_max_tokens: int = 256
 

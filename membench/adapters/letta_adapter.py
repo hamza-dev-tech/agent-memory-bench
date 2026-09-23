@@ -10,7 +10,7 @@ Things a copier will trip over:
   the server keeps everything in SQLite, so no container is involved:
 
       python -m venv .venv-letta                      not the harness venv, see below
-      .venv-letta/Scripts/pip install "letta==0.16.8"
+      .venv-letta/Scripts/pip install "letta==0.16.8" asyncpg
       set GROQ_API_KEY=...                            resolves the model handle
       .venv-letta/Scripts/letta server --port 8283
 
@@ -19,6 +19,10 @@ Things a copier will trip over:
   langchain-openai means a downgrade underneath two of the systems being
   measured. The server is a separate process reached over HTTP, so nothing is
   lost by keeping it apart; the harness itself only needs letta-client.
+
+  asyncpg is not a typo. 0.16.8 imports it at module scope from its ORM base,
+  so the server will not boot without it even though SQLite is doing the work
+  and no Postgres exists. It is not in the package's own dependencies.
 
   Pin that version. The `letta` name on PyPI is now Letta Code, a terminal agent
   that installs its own `letta` command and contains no REST server; 0.16.8 is

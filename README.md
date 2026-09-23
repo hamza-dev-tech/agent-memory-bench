@@ -79,6 +79,30 @@ Output lands in `results/<run-id>/`:
 - `review.csv` - probes where the LLM judge and the string match disagreed.
   Read these by hand before publishing anything.
 
+## Picking a model endpoint
+
+Three environment variables, no code change:
+
+```bash
+export MEMBENCH_LLM_KEY_ENV=OPENAI_API_KEY
+export MEMBENCH_LLM_BASE_URL=https://api.openai.com/v1
+export MEMBENCH_LLM=gpt-4o-mini
+```
+
+Two things are worth knowing before picking something cheaper.
+
+GoodMem and Letta make no model calls at all while ingesting. Mem0, LangMem and Zep each
+run an extraction model on every turn, so a weak model damages those three and leaves the
+other two untouched. The comparison stays internally consistent and the absolute numbers
+stop meaning anything.
+
+Mem0's extraction prompt is 33,653 characters, about 8,478 tokens, and it goes out on
+every turn. On a 788 turn workload that is 10M of the 22.2M input tokens the whole run
+costs, so the endpoint has to accept requests of that size: a free tier capping requests
+at 8,000 tokens rejects every Mem0 write outright, and no amount of waiting helps. The
+prompt is also byte-identical each time, which is worth a lot wherever prompt caching
+exists.
+
 ## A note on the environment
 
 Install into a virtualenv and leave scikit-learn out of it. transformers only
