@@ -224,6 +224,8 @@ class ZepGraphitiSystem(MemorySystem):
                 "has the commands to start one."
             ) from e
 
+        self._build_fulltext_indices()
+
     def teardown(self) -> None:
         if self.graphiti is not None:
             self._run(self.graphiti.close())
@@ -259,8 +261,77 @@ class ZepGraphitiSystem(MemorySystem):
         return t[0]
 
     def flush(self, user_key: str) -> None:
-        """Nothing to wait for. add_episode extracts, resolves and writes before
-        it returns, which is also why it is the slowest ingest in the table."""
+        """add_episode extracts, resolves and writes before it returns, which is
+        also why it is the slowest ingest in the table, so there is no queue to
+        drain. Kuzu's text indices are the exception: they are snapshots, so
+        they are rebuilt here, once, after the whole conversation is in."""
+        if self.backend == "kuzu":
+            self._build_fulltext_indices(rebuild=True)
+
+    # -- kuzu text indices -----------------------------------------------------------
+
+    def _build_fulltext_indices(self, rebuild: bool = False) -> None:
+        """Create the text indices graphiti searches but never makes on Kuzu.
+
+        Two separate holes in graphiti-core 0.30. KuzuDriver's
+        build_indices_and_constraints() is a no-op whose comment says the
+        indices come from setup_schema(), and setup_schema() only creates
+        tables, so every hybrid search raises "Table RelatesToNode_ doesn't have
+        an index with name edge_name_and_fact" and the turn is lost. Nothing
+        loads Kuzu's FTS extension either. The statements come from graphiti's
+        own get_fulltext_indices() rather than a copy, so they follow the
+        library rather than drift from it.
+
+        Rebuilding matters as much as creating. A Kuzu text index is a snapshot
+        of the table at the moment it was built and does not follow later
+        writes, so an index made at setup finds nothing that was ingested
+        afterwards and the BM25 half of the hybrid search silently contributes
+        nothing. flush() rebuilds once, after the conversation is in, which is
+        the only point where the graph is complete and no probe has run.
+        """
+        if self.backend != "kuzu":
+            return  # neo4j creates its own on build_indices_and_constraints
+
+        import kuzu
+        from graphiti_core.driver.driver import GraphProvider
+        from graphiti_core.graph_queries import get_fulltext_indices
+
+        conn = kuzu.Connection(self.graphiti.driver.db)
+        try:
+            # the extension download is cached under ~/.kuzu after the first run
+            for stmt in ("INSTALL FTS", "LOAD FTS"):
+                conn.execute(stmt)
+
+            for stmt in get_fulltext_indices(GraphProvider.KUZU):
+                table, index = self._index_target(stmt)
+                if not (table and index):
+                    # skipping quietly would leave a stale index behind and the
+                    # BM25 half of every search would contribute nothing
+                    raise RuntimeError(
+                        f"cannot read the table and index name out of graphiti's own "
+                        f"statement, so the index cannot be rebuilt: {stmt!r}"
+                    )
+                if rebuild:
+                    try:
+                        conn.execute(f"CALL DROP_FTS_INDEX('{table}', '{index}')")
+                    except Exception:
+                        pass  # never created, which is the same end state
+                try:
+                    conn.execute(stmt)
+                except Exception as e:
+                    # already there on the first pass is fine; anything else is not
+                    if "already exists" not in str(e).lower():
+                        raise RuntimeError(
+                            f"could not build the {index or '?'} text index on Kuzu: {e}"
+                        ) from e
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _index_target(stmt: str) -> tuple[str | None, str | None]:
+        """Pull the table and index name out of a CREATE_FTS_INDEX call."""
+        m = re.search(r"CREATE_FTS_INDEX\(\s*'([^']+)'\s*,\s*'([^']+)'", stmt)
+        return (m.group(1), m.group(2)) if m else (None, None)
 
     # -- read --------------------------------------------------------------------
 

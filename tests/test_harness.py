@@ -251,3 +251,24 @@ def test_ingest_gives_up_early_when_every_turn_fails(tmp_path):
         )
     # stopped at the threshold instead of walking all 419 turns
     assert BrokenSystem.attempts == CONFIG.ingest_abort_after
+
+
+def test_kuzu_index_names_parse_out_of_graphitis_own_statements():
+    """The rebuild is only as good as this parse.
+
+    graphiti generates the CREATE_FTS_INDEX calls; the adapter has to read the
+    table and index back out of them to drop the stale ones first. If that ever
+    silently returned nothing, the indices would never be rebuilt, the BM25 half
+    of every hybrid search would quietly contribute nothing, and Zep's numbers
+    would be wrong in a way no error message would mention.
+    """
+    from membench.adapters.zep_adapter import ZepGraphitiSystem as Z
+
+    assert Z._index_target(
+        "CALL CREATE_FTS_INDEX('RelatesToNode_', 'edge_name_and_fact', ['name', 'fact']);"
+    ) == ("RelatesToNode_", "edge_name_and_fact")
+    assert Z._index_target("CALL CREATE_FTS_INDEX( 'Entity' , 'node_name_and_summary' , ['name'])") == (
+        "Entity",
+        "node_name_and_summary",
+    )
+    assert Z._index_target("CREATE FULLTEXT INDEX edge_name_and_fact") == (None, None)
