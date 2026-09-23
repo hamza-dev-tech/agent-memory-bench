@@ -68,6 +68,13 @@ Run `{cfg.run_id}`, {stamp}.
 ## Setup
 
 - Answering model: `{cfg.llm_model}` at temperature {cfg.llm_temperature}, same for every system.
+- Grading model: `{cfg.judge_model}`, also at temperature 0.
+- Endpoint: `{cfg.llm_base_url}`. Named because the same model id behaves differently
+  across hosts, and a table that only says the model cannot be checked.
+- Extraction: GoodMem and Letta make no model calls while ingesting; they store the turn
+  and embed it. Mem0, LangMem and Zep each run `{cfg.llm_model}` on every turn to decide
+  what is worth keeping. So the answering model is shared, and the cost of a weak one is
+  not: it falls on those three and not on the other two.
 - Embeddings: `{cfg.embed_model}`, run locally for the self-hosted systems and on
   the vendor's own hosting for GoodMem. Same model, different host.
 - Workload: {convs} LoCoMo {"conversation" if convs == 1 else "conversations"},
