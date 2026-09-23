@@ -272,3 +272,30 @@ def test_kuzu_index_names_parse_out_of_graphitis_own_statements():
         "node_name_and_summary",
     )
     assert Z._index_target("CREATE FULLTEXT INDEX edge_name_and_fact") == (None, None)
+
+
+def test_the_article_is_either_a_draft_or_has_no_placeholders():
+    """The failure this whole repo exists to prevent, as an assertion.
+
+    docs/ARTICLE.md is written before the numbers exist, so every measured
+    value is a <<TK>> marker. The danger is obvious: a marker that nobody
+    notices becomes a number that nobody measured, which is precisely how the
+    post this replaces came to be. So the file may carry markers while it says
+    DRAFT at the top, and may drop the DRAFT line only once every marker is
+    gone. There is no third state.
+    """
+    article = ROOT / "docs" / "ARTICLE.md"
+    if not article.exists():
+        return
+
+    text = article.read_text(encoding="utf-8")
+    is_draft = text.lstrip().startswith("# DRAFT")
+    placeholders = text.count("<<TK")
+
+    if is_draft:
+        return
+    assert placeholders == 0, (
+        f"{article.name} no longer says DRAFT but still has {placeholders} "
+        "unfilled placeholder(s). Fill them from the run log or put the DRAFT "
+        "line back."
+    )
