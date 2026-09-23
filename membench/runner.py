@@ -32,9 +32,17 @@ class Runner:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._done = self._load_done()
 
-    def _load_done(self) -> set[tuple[str, str]]:
-        """(system, probe_id) pairs already graded, so a resumed run skips them."""
-        done: set[tuple[str, str]] = set()
+    def _load_done(self) -> set[tuple[str, str, str]]:
+        """(system, track, probe_id) triples already graded, so a resumed run skips them.
+
+        The track belongs in the key. Two tracks of the same product share a
+        system key by design, and without the track the second one finds every
+        probe already graded, skips the whole conversation and writes nothing.
+        The report is rebuilt from probe records, so it then comes out with that
+        track simply absent and no error anywhere: the vendor-recommended run
+        that was the point of the exercise silently did not happen.
+        """
+        done: set[tuple[str, str, str]] = set()
         if self.log_path.exists():
             with open(self.log_path, encoding="utf-8") as f:
                 for line in f:
@@ -43,7 +51,7 @@ class Runner:
                     except json.JSONDecodeError:
                         continue
                     if r.get("kind") == "probe":
-                        done.add((r["system"], r["probe_id"]))
+                        done.add((r["system"], r.get("track", ""), r["probe_id"]))
         return done
 
     def _write(self, kind: str, payload: dict) -> None:
@@ -71,7 +79,10 @@ class Runner:
 
     def _one_conversation(self, system: MemorySystem, conv: Conversation, summary: SystemSummary) -> None:
         run_key = f"{self.cfg.run_id}-{system.key}-{conv.conversation_id}"
-        pending = [p for p in conv.probes if (system.key, p.probe_id) not in self._done]
+        pending = [
+            p for p in conv.probes
+            if (system.key, system.track, p.probe_id) not in self._done
+        ]
         if not pending:
             print(f"  {conv.conversation_id}: already graded, skipping")
             return
@@ -135,7 +146,7 @@ class Runner:
                 })
                 continue
             summary.add(rec)
-            self._done.add((system.key, probe.probe_id))
+            self._done.add((system.key, system.track, probe.probe_id))
             self._write("probe", rec.as_dict())
             mark = "ok " if rec.correct else "MISS"
             print(f"    [{n}/{len(pending)}] {mark} {probe.category_name:<12} {probe.question[:58]}")

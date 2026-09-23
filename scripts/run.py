@@ -95,6 +95,16 @@ def main() -> int:
     summaries = rebuild_summaries(log)
     records, _, _ = load_log(log)
 
+    # A system that was asked for and graded nothing drops out of the report
+    # without leaving a mark, because the report is rebuilt from probe records.
+    # That is how a whole track goes missing quietly, so say it out loud.
+    present = {(s.system, s.track) for s in summaries}
+    for name in args.systems:
+        if not any(name.split("-")[0] == sys_key for sys_key, _ in present):
+            print(f"!! {name} produced no graded probes and is not in the table")
+        elif name.endswith("-recommended") and not any(t == "recommended" for _, t in present):
+            print(f"!! {name} produced no graded probes and is not in the table")
+
     path = report.write(cfg, summaries, info, out_dir)
     review = report.write_review_csv(records, out_dir)
     print(f"\nwrote {path}")

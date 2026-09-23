@@ -299,3 +299,30 @@ def test_the_article_is_either_a_draft_or_has_no_placeholders():
         "unfilled placeholder(s). Fill them from the run log or put the DRAFT "
         "line back."
     )
+
+
+def test_two_tracks_of_one_system_do_not_collide_on_resume(tmp_path):
+    """The bug that made the vendor-recommended run silently not happen.
+
+    Two tracks of the same product share a system key on purpose. Resume used
+    to remember (system, probe_id), so the second track found every probe
+    already graded, skipped the conversation, and wrote nothing. Since the
+    report is rebuilt from probe records, the track then vanished from the
+    table with no error anywhere, which is indistinguishable from never having
+    asked for it.
+    """
+    convs = dataset.build(CONFIG.dataset_path, 1, 4, 1, CONFIG.seed)
+    convs[0].turns = convs[0].turns[:40]
+    log = tmp_path / "probes.jsonl"
+
+    class Recommended(FakeSystem):
+        track = "recommended"
+
+    first = Runner(CONFIG, FakeChat(), FakeJudge(), log).run_system(FakeSystem(), convs)
+    second = Runner(CONFIG, FakeChat(), FakeJudge(), log).run_system(Recommended(), convs)
+    assert first.probes > 0
+    assert second.probes == first.probes, "the second track was skipped as already graded"
+
+    # and a genuine resume of the same track still skips
+    again = Runner(CONFIG, FakeChat(), FakeJudge(), log).run_system(Recommended(), convs)
+    assert again.probes == 0
