@@ -111,7 +111,7 @@
           "name": "Do AI agent memory systems hallucinate?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes, and it is measurable. On 28 questions with no answer anywhere in the conversation, five of six configurations correctly refused 92.9% of the time. GoodMem's reranked configuration refused only 82.1% and LangMem 85.7%. Adding a reranker raised recall by 4.3 points and lowered the refusal rate by 10.8."
+            "text": "Yes, and it is measurable. On 28 questions with no answer anywhere in the conversation, four of six configurations correctly refused 92.9% of the time. GoodMem's reranked configuration refused only 82.1% and LangMem 85.7%. Adding a reranker raised recall by 4.3 points and lowered the refusal rate by 10.8."
           }
         },
         {
@@ -119,7 +119,7 @@
           "name": "Is it worth running an LLM extraction pass on every conversation turn?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "On this workload, no. The two systems that store turns verbatim and run no model while ingesting, GoodMem and Letta, placed first and third, ahead of all three systems that extract facts per turn, while ingesting four to ten times faster."
+            "text": "On this workload, no. The two systems that store turns verbatim and run no model while ingesting, GoodMem and Letta, placed first and third, ahead of all three systems that extract facts per turn, while ingesting four to eleven times faster."
           }
         },
         {

@@ -70,13 +70,18 @@ vendors.
 This is the most important section on the page, so it comes before the results.
 
 Mem0's research page reports **92.5% on LoCoMo**. Published figures for these
-systems generally cluster between 80% and 93%. I measured the same dataset and
-got 37% to 58%.
+systems generally cluster between 80% and 93%. I ran the same benchmark and got
+37% to 58%.
 
 Their numbers are not fabricated. Mine are not wrong. **We are measuring
 different things**, and almost nobody says which.
 
-Three differences account for most of the gap.
+First, the difference that is my fault and not theirs: Mem0's figure is over
+1,540 questions across all ten LoCoMo conversations. Mine is 120 probes from
+one of them. That is a smaller sample and a narrower claim, and you should
+weight it accordingly. It is not what produces a forty-point gap.
+
+Three things do.
 
 **1. Who writes the answer.** Most published evaluations let each system answer
 in its own way. GoodMem and Letta will happily generate the answer themselves
@@ -88,13 +93,19 @@ points, and it is the only way the comparison is about memory.
 
 **2. Which answering model.** A stronger model recovers answers from worse
 retrieval. Mem0's research page does not name the answering model it used. This
-one uses `gpt-4o-mini` for every system, named, at temperature 0. A
-frontier-model run would move every row up, and not by the same amount.
+one uses `gpt-4o-mini` for every system, named, at temperature 0, chosen because
+the entire run had to cost a few dollars. A frontier model would move every row
+up, and not by the same amount.
 
 **3. How it is graded.** Published scores rarely say who decided a given answer
 was right. Here it is a normalised string match plus an LLM judge at
 temperature 0, and every disagreement between the two was read by hand. There
 were 125 of them.
+
+The honest summary: **I cannot tell you Mem0 is not 92.5%, because their method
+is not published.** I can tell you exactly what mine is, and that under it no
+system cleared 58%. Whether those two facts are in tension is a question only
+the vendors can answer, and all five are welcome to.
 
 None of that makes 92.5% dishonest. It makes it **incomparable** — to my
 numbers, to the other vendors' numbers, and to yours. A benchmark score without
@@ -150,7 +161,7 @@ finished first and third. The three that run an extraction model on every
 single turn finished second-to-last, fourth and last.
 
 Letta is the sharpest version of this. It stores the turn verbatim, embeds it,
-and beats Mem0 and Zep while ingesting four to ten times faster. It is also a
+and beats Mem0 and Zep while ingesting four to eleven times faster. It is also a
 year-old release that needed a patch to write to its own database at all.
 
 This is the finding I least expected and the one I would most like someone to
@@ -177,10 +188,33 @@ customer unsupervised. **This is the number I would most want from a comparison
 and the one nobody publishes**, because you only get it if you deliberately ask
 questions that have no answers.
 
+### GoodMem wins on recall and pays for it in latency
+
+Top of the table on both its rows, and the only system that beat Letta. At
+defaults it is second on recall with the joint-best refusal rate, which is the
+combination I would actually want: it says "I don't know" as reliably as
+anything here while finding more than anything except its own tuned
+configuration.
+
+Its weakness is the clock. **633 ms at the median and 1,123 ms at p95**, the
+slowest search in the table by a factor of two. It is the only hosted system
+here, so a good part of that is a network round trip I would not pay
+self-hosting it, and none of the others were tested over a network. Read the
+latency column as "hosted product, from Pakistan, over the public internet"
+rather than as a property of the engine.
+
+It also has the widest strict-versus-lenient gap on its defaults row, 4.3
+points, which means more of its correct answers were the arguable kind.
+
+Worth stating plainly because they paid to be here: GoodMem finished first, and
+the single largest correction in this whole exercise came from their team
+catching a bug of mine that was holding their own score down. That section is
+below.
+
 ### Zep is losing on retrieval, not on the graph
 
-Last by fifteen points, and it returns the **smallest context in the table by a
-wide margin**: 212 tokens against Mem0's 353 and LangMem's 884. It refuses
+Last by nine points behind the next worst and twenty behind the leader, and yet
+it returns the **smallest context in the table by a wide margin**: 212 tokens against Mem0's 353 and LangMem's 884. It refuses
 adversarial probes as well as anyone.
 
 A temporal knowledge graph gives back terse, well-formed facts. There are just
@@ -201,8 +235,8 @@ happened.
 
 ### Mem0 is the fastest to search and the cheapest to read
 
-**38 ms at the median**, four times quicker than anything else and seventeen
-times quicker than GoodMem. It runs on local Qdrant, so that is partly a
+**38 ms at the median**, not quite twice as quick as the next fastest and
+seventeen times quicker than GoodMem. It runs on local Qdrant, so that is partly a
 hosting comparison rather than a quality one, but if you are self-hosting it is
 the number you feel.
 
@@ -220,6 +254,34 @@ multi-hop questions.**
 If you are building on agent memory today, you are building on a component that
 gets roughly half the questions right on a long conversation. Plan for that
 rather than for the number on the vendor's landing page.
+
+---
+
+## What it costs to run
+
+Three numbers, and the one that matters is not the one people quote.
+
+**Context size is paid on every question, forever.** Zep's 212 tokens against
+LangMem's 884 is a four-fold difference in the standing cost of asking
+anything, and LangMem is the one with the lower recall. GoodMem and Letta both
+sit around 503, Mem0 at 353. If you are serving a lot of queries, this column
+outweighs everything else on the page.
+
+**Ingest is where the extraction systems spend.** Over the same 419 turns:
+GoodMem 0.28 s per turn, Letta 0.37 s, Mem0 1.52 s, Zep 3.65 s, LangMem 4.15 s.
+The first two make no model calls at all. The last three are almost entirely
+waiting on one, which is also money.
+
+**And the figure that surprised me most.** Mem0's extraction prompt is 33,653
+characters, roughly 8,478 tokens, sent unchanged on every turn. Across this one
+conversation that is about ten million input tokens before a single question is
+asked, which was most of what the entire benchmark cost. It is byte-identical
+each time, so prompt caching reclaims most of it where caching exists. Where it
+does not, plan for it.
+
+For scale: the complete run, six configurations over 419 turns and 120 probes
+each, cost under three dollars on `gpt-4o-mini`. That is the whole reason a
+benchmark like this can be independent. Nobody needs a grant to check this.
 
 ---
 
@@ -242,9 +304,9 @@ A system that always produces something confident scores well on an ordinary
 benchmark and is a liability in production. Here, refusing is correct and
 answering is a hallucination.
 
-It separates the field more sharply than recall does: five of six rows refuse
-92.9% of them. The two that do not are GoodMem's tuned configuration at 82.1%
-and LangMem at 85.7%.
+It separates the field more sharply than recall does: four of six rows refuse
+exactly 92.9% of them. The two that do not are GoodMem's tuned configuration at
+82.1% and LangMem at 85.7%.
 
 ### Two graders, and a human for the arguments
 
@@ -412,7 +474,8 @@ quicker than anything else, mid-table recall, and the least context to pay for
 among the self-hosted options at 353 tokens. Weak on multi-hop.
 
 **Choose Zep if context cost dominates.** 212 tokens per answer, by a distance
-the cheapest thing to read. You pay for that with fifteen points of recall.
+the cheapest thing to read. You pay for that with nine points of recall against the next worst system, and
+twenty against the best.
 Good refusal behaviour.
 
 **Choose Letta if ingest volume is the constraint.** No LLM calls while
@@ -455,14 +518,14 @@ smallest context of any system measured.
 
 **Do agent memory systems hallucinate?**
 Yes, and it is measurable. On 28 questions with no answer in the conversation,
-five of six configurations correctly refused 92.9% of the time. GoodMem's
+four of six configurations correctly refused 92.9% of the time. GoodMem's
 reranked configuration refused only 82.1% and LangMem 85.7%. Adding a reranker
 raised recall by 4.3 points and lowered refusal by 10.8.
 
 **Is it worth running an LLM extraction pass on every turn?**
 On this workload, no. The two systems that store turns verbatim and run no
 model while ingesting, GoodMem and Letta, placed first and third, ahead of all
-three systems that extract facts per turn, while ingesting four to ten times
+three systems that extract facts per turn, while ingesting four to eleven times
 faster.
 
 **Can I reproduce these results?**
