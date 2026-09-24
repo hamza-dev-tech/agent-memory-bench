@@ -72,14 +72,16 @@ class Config:
     results_dir: Path = RESULTS_DIR
 
     # ---- GoodMem (instance supplied by the vendor, disclosed in the write-up) ----
-    goodmem_base_url: str = _env(
-        "GOODMEM_BASE_URL", "https://gm-hamzadevtech01-collab-0821dca3.app.goodmem.ai"
-    )
-    goodmem_default_space: str = _env("GOODMEM_DEFAULT_SPACE", "642d0ac7-2c18-4c35-aed9-bbfde7ad59cd")
-    goodmem_optimized_space: str = _env("GOODMEM_OPTIMIZED_SPACE", "dd13a445-8aa5-4294-a561-630561de4e45")
+    # Empty defaults on purpose. These identify somebody else's hosted instance,
+    # and a public harness has no business shipping another party's hostname as
+    # a default that runs if you forget to override it. Set them in .env; the
+    # adapter refuses to start without them.
+    goodmem_base_url: str = _env("GOODMEM_BASE_URL", "")
+    goodmem_default_space: str = _env("GOODMEM_DEFAULT_SPACE", "")
+    goodmem_optimized_space: str = _env("GOODMEM_OPTIMIZED_SPACE", "")
     # post-processor ids for the vendor-recommended track only
-    goodmem_llm_id: str = _env("GOODMEM_LLM_ID", "ac3ca82e-3d69-4026-a3dc-a017d5e9902f")
-    goodmem_reranker_id: str = _env("GOODMEM_RERANKER_ID", "013495c5-71a3-4de7-af14-a54605630420")
+    goodmem_llm_id: str = _env("GOODMEM_LLM_ID", "")
+    goodmem_reranker_id: str = _env("GOODMEM_RERANKER_ID", "")
 
     extra: dict = field(default_factory=dict)
 

@@ -88,8 +88,22 @@ class GoodMemSystem(MemorySystem):
         from goodmem import Goodmem  # imported late so the package is optional
 
         key = os.environ.get("GOODMEM_API_KEY")
-        if not key:
-            raise RuntimeError("GOODMEM_API_KEY is not set")
+        missing = [
+            name for name, value in (
+                ("GOODMEM_API_KEY", key),
+                ("GOODMEM_BASE_URL", self.cfg.goodmem_base_url),
+                (f"GOODMEM_{'DEFAULT' if self.track == 'baseline' else 'OPTIMIZED'}_SPACE", self._space),
+            ) if not value
+        ]
+        if self.track != "baseline" and not self.cfg.goodmem_reranker_id:
+            missing.append("GOODMEM_RERANKER_ID")
+        if missing:
+            # These name somebody else's hosted instance, so the repo ships no
+            # defaults for them and this says which one is absent rather than
+            # failing later against an empty base url.
+            raise RuntimeError(
+                "GoodMem needs an instance of your own. Not set: " + ", ".join(missing)
+            )
         self.client = Goodmem(base_url=self.cfg.goodmem_base_url, api_key=key, timeout=120.0)
         try:
             from importlib.metadata import version
