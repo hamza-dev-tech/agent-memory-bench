@@ -103,18 +103,47 @@ class GoodMemSystem(MemorySystem):
             self.client = None
 
     def reset(self, run_key: str) -> None:
-        if not self._written:
-            return
+        """Empty the space, and check that it emptied.
+
+        This used to delete self._written, which is an in-memory list. A fresh
+        process therefore had nothing to delete and left whatever was already
+        in the space untouched. Several smoke runs and one failed attempt
+        later, the space held more than one copy of the same conversation, and
+        GoodMem was the only system in the table searching a polluted index:
+        duplicates crowd a top-k with repeats of one fact and push distinct
+        facts out of it, so its recall was measured against a handicap none of
+        the others had. Every other adapter drops its whole scope, not its own
+        bookkeeping: mem0 delete_all, Letta deletes the agent, graphiti
+        clear_data.
+
+        The verification is the point. A delete that silently fails leaves
+        exactly the state that caused this, and nothing downstream can see it.
+        """
         from goodmem.models import BatchDeleteMemorySelectorRequest
 
-        for batch in _batched(self._written, BATCH_SIZE):
-            try:
-                self.client.memories.batch_delete(
-                    requests=[BatchDeleteMemorySelectorRequest(memory_id=m) for m in batch]
-                )
-            except Exception:
-                pass  # already gone, or the space was cleared by hand
+        existing = self._space_memory_ids()
+        for batch in _batched(existing, BATCH_SIZE):
+            self.client.memories.batch_delete(
+                requests=[BatchDeleteMemorySelectorRequest(memory_id=m) for m in batch]
+            )
         self._written = []
+
+        left = self._space_memory_ids()
+        if left:
+            raise RuntimeError(
+                f"{len(left)} memories are still in space {self._space} after deleting "
+                f"{len(existing)}. Retrieval would run against someone else's data, so "
+                "this stops here rather than publishing a number measured on it."
+            )
+
+    def _space_memory_ids(self) -> list[str]:
+        """Every memory id in the space, following pagination to the end.
+
+        max_items is deliberately absent: a cap here would silently leave the
+        tail of a large space in place, which is the bug this method exists to
+        close.
+        """
+        return [m.memory_id for m in self.client.memories.list(space_id=self._space)]
 
     # -- write -------------------------------------------------------------------
 
@@ -160,6 +189,19 @@ class GoodMemSystem(MemorySystem):
                 time.sleep(POLL_INTERVAL_S)
         if pending:
             raise TimeoutError(f"{len(pending)} memories still indexing after {INDEX_TIMEOUT_S}s")
+
+        # Second guard, on the other side of the write. reset() proved the space
+        # was empty before; this proves nothing else arrived while we filled it.
+        # A space holding more than this conversation retrieves other runs'
+        # chunks into the context window, and the resulting recall number looks
+        # entirely normal.
+        in_space = len(self._space_memory_ids())
+        if in_space != len(self._written):
+            raise RuntimeError(
+                f"space {self._space} holds {in_space} memories but this run wrote "
+                f"{len(self._written)}. Something else is writing to it, and retrieval "
+                "would mix the two."
+            )
 
     # -- read --------------------------------------------------------------------
 
