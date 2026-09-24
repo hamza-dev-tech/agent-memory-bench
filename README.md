@@ -47,13 +47,13 @@ time per turn.
 
 ## Systems
 
-| System | How it runs |
-| --- | --- |
-| Mem0 | open source, self-hosted |
-| Letta | open source, self-hosted server in its own venv, see the adapter |
-| LangMem | open source, in process |
-| Zep (Graphiti) | open source engine, self-hosted |
-| GoodMem | hosted instance provided by the vendor |
+| System | Licence | How it ran here |
+| --- | --- | --- |
+| Mem0 | Apache 2.0, open source | self-hosted, local Qdrant |
+| Letta | Apache 2.0, open source | self-hosted server in its own venv, see the adapter |
+| LangMem | MIT, open source | in process |
+| Zep (Graphiti) | Apache 2.0 engine, open source | self-hosted on embedded Kuzu |
+| GoodMem | not open source; free to self-host commercially under the vendor's Free Binary License, with perpetual rights to versions obtained under it. Managed hosting is a paid option. | ran on a hosted instance supplied by the vendor |
 
 Two tracks. **Baseline** puts every system on the same models with default
 settings. **Recommended** is opt-in: a vendor who provides a configured

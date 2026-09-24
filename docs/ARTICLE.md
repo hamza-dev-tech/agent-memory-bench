@@ -180,7 +180,11 @@ hallucinations, almost exactly one for one.
 
 A reranker does what a reranker does. Asked something the conversation never
 addressed, it still finds the closest-looking chunks and hands them over with
-confidence, and the model obliges.
+confidence, and the model obliges. GoodMem's team read it the same way when
+they saw the number: reranking promotes plausible but insufficient evidence,
+and plausible evidence is exactly what stops a model abstaining. The prompt
+that gives it the option to abstain is published above, and every answer it
+produced is in the log, so this is checkable rather than a story.
 
 Whether that is a good trade is a question about your product, not about
 GoodMem. It is fine behind a search box. It is bad in anything that talks to a
@@ -308,6 +312,36 @@ It separates the field more sharply than recall does: four of six rows refuse
 exactly 92.9% of them. The two that do not are GoodMem's tuned configuration at
 82.1% and LangMem at 85.7%.
 
+### The prompt, in full
+
+Every system's retrieved chunks go to the same model behind the same prompt,
+so it belongs in the open rather than in a file nobody opens:
+
+```
+SYSTEM
+You answer questions about two people's past conversations using only the
+notes provided. The notes are the only thing you know. Answer with the
+shortest factual answer: a name, a date, a place, a short phrase. Do not
+explain, do not add a sentence around it. If the notes do not contain the
+answer, reply with exactly: NO ANSWER
+
+USER
+NOTES
+{retrieved chunks, newline separated}
+
+QUESTION
+{question}
+
+SHORT ANSWER:
+```
+
+That last instruction is the whole abstention mechanism. Nothing else tells
+the model it is allowed to decline, so the refusal column measures how often
+the retrieved notes were weak enough that the model took the option.
+
+Every answer the model gave, for every system and every probe, is in
+`probes.jsonl` alongside what was retrieved and how big it was.
+
 ### Two graders, and a human for the arguments
 
 A normalised string match and an LLM judge at temperature 0 both score every
@@ -359,13 +393,21 @@ self-hosted system. Top 10 retrieved for everyone. Fixed seed.
 
 ### What each system is
 
-| System | Version | How it stores | LLM calls while ingesting |
-|---|---|---|---|
-| GoodMem | hosted, vendor instance | chunks in a managed space | **none** |
-| Mem0 | 2.1.0 | extracted facts, local Qdrant | one or more per turn |
-| LangMem | 0.0.30 | extracted to a LangGraph store | one per turn |
-| Zep (Graphiti) | 0.30.2 | temporal knowledge graph, Kuzu | several per turn |
-| Letta | 0.11.7 | archival memory, SQLite | **none** |
+| System | Version | Licence | How it stores | LLM calls ingesting |
+|---|---|---|---|---|
+| GoodMem | hosted instance | not open source, free to self-host commercially | chunks in a managed space | **none** |
+| Mem0 | 2.1.0 | Apache 2.0 | extracted facts, local Qdrant | one or more per turn |
+| LangMem | 0.0.30 | MIT | extracted to a LangGraph store | one per turn |
+| Zep (Graphiti) | 0.30.2 | Apache 2.0 | temporal knowledge graph, Kuzu | several per turn |
+| Letta | 0.11.7 | Apache 2.0 | archival memory, SQLite | **none** |
+
+A note on that licence column, because an earlier version of this post
+collapsed it into "hosted" and left the wrong impression. GoodMem's server is
+not open source, but it is **free to self-host for commercial use** under the
+vendor's Free Binary License, with perpetual rights to versions obtained under
+it; managed hosting is an optional paid product. That is a different fact from
+price, and worth separating. It ran here on a hosted instance because that is
+what was supplied, not because self-hosting costs money.
 
 That last column decides how you read the ingest figures, which is why it is in
 the table and not a footnote.
