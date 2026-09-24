@@ -6,6 +6,27 @@ agent memory systems and grades what each one can recall.
 The point is not to crown a winner. It is that anyone can rerun this and get
 the same numbers, including the vendors being measured.
 
+**Results from the 2026-09-23 run, and the write-up:**
+[I Benchmarked 5 AI Agent Memory Systems. The Best Scored 57.6%.](https://hamzashabbir.dev/article/agent-memory-mem0-vs-letta-vs-zep-vs-langmem-benchmark-2026)
+
+| System | Recall | Refused adversarial | Search p50 | Memory tokens | Ingest/turn |
+|---|---:|---:|---:|---:|---:|
+| GoodMem (vendor config) | 57.6% | 82.1% | 754 ms | 504 | 0.28 s |
+| GoodMem (defaults) | 53.3% | 92.9% | 633 ms | 503 | 0.28 s |
+| Letta 0.11.7 | 52.2% | 92.9% | 318 ms | 503 | 0.37 s |
+| Mem0 2.1.0 | 50.0% | 92.9% | 38 ms | 353 | 1.52 s |
+| LangMem 0.0.30 | 45.7% | 85.7% | 68 ms | 884 | 4.15 s |
+| Zep / Graphiti 0.30.2 | 37.0% | 92.9% | 163 ms | 212 | 3.65 s |
+
+419 turns, 120 probes, `gpt-4o-mini` at temperature 0 for every system, top 10
+retrieved. Published vendor figures for these systems run 80-93%; the
+difference is method, and this repo is the method.
+
+If that is useful, a star helps the next person find a number they can check
+rather than one they have to take on faith. If your system is not in the table
+and you would like it to be, open an issue: adapters are about 80 lines and the
+result gets published either way.
+
 ## What it measures
 
 Every system gets identical treatment:

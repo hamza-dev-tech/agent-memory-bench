@@ -55,8 +55,8 @@ answering his technical questions meant admitting there was nothing underneath
 it. So I built the thing that should have existed the first time, ran all five
 systems on it, and published the code.
 
-The old post now redirects here. I am not quietly editing numbers and leaving
-the URL working.
+You are reading this at the URL that post lived at. I am not moving the
+correction somewhere quieter than the mistake.
 
 If that makes you trust this page less, good. Check it. Every number below is
 recomputable from a JSON file in the repo, which is more than I can say for
@@ -559,15 +559,16 @@ Every number here is recomputable from `probes.jsonl`.
 
 ## Disclosure
 
-GoodMem's team paid for their system to be included in this comparison.
+GoodMem's team are paying for their system to be included in this comparison.
 
 - The instance and API key were supplied by them.
 - The vendor-config track uses the configuration they recommended.
 - They were shown their own results before publication and invited to respond.
-  They did not see other systems' numbers in advance and did not review this
-  post.
-- Every vendor named here was contacted with their results and given the same
-  opportunity to reply.
+  They did not see the other systems' numbers in advance and did not review
+  this post.
+- Every other vendor named here is being sent their results with the same
+  invitation. Corrections and replies get published on this page as they
+  arrive.
 - The harness is public and the instance is theirs, so they can run it
   themselves, which is the main reason a flattering result would have been
   worthless to everybody, including them.
@@ -590,6 +591,12 @@ python scripts/run.py --systems mem0 langmem zep --conversations 1 --probes 120
 what the system retrieved, what the model answered, what both graders said, and
 how long every step took. If you think a number here is wrong, the record that
 produced it is in the repo.
+
+If the harness is useful to you, **a star on the repo genuinely helps** — it is
+how the next person building on agent memory finds a number they can check
+instead of one they have to take on faith.
+
+[**github.com/hamza-dev-tech/agent-memory-bench**](https://github.com/hamza-dev-tech/agent-memory-bench)
 
 **Running a memory system I did not test?** Adapters are about 80 lines against
 a five-method interface. Open an issue or send me the endpoint and I will run
