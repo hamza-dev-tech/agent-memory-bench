@@ -1,0 +1,136 @@
+{
+  "_comment": [
+    "JSON-LD for the article page. Paste inside a <script type=\"application/ld+json\"> tag in <head>.",
+    "Three graphs in one: the Article itself, the Dataset behind it, and the FAQ.",
+    "The Dataset node is the one that matters most here and almost nobody ships it.",
+    "It tells an answer engine this page is original measurement rather than a",
+    "summary of somebody else's, which is the single strongest reason to cite a page.",
+    "Every value below must match what a reader can see on the page. Answer engines",
+    "check that, and a mismatch is worse than no markup at all.",
+    "Replace HOSTED_URL and the image path before publishing."
+  ],
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "@id": "HOSTED_URL#article",
+      "headline": "I Benchmarked 5 AI Agent Memory Systems. The Best Scored 57.6%.",
+      "description": "Independent LoCoMo benchmark of Mem0, Zep, Letta, LangMem and GoodMem. Vendors publish 80-93%. Measured under retrieved-text-only rules, the best scored 57.6%.",
+      "datePublished": "2026-09-24",
+      "dateModified": "2026-09-24",
+      "inLanguage": "en",
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Person",
+        "@id": "https://hamzashabbir.dev/#person",
+        "name": "Malik Hamza Shabbir",
+        "url": "https://hamzashabbir.dev",
+        "sameAs": ["https://github.com/hamza-dev-tech"],
+        "knowsAbout": [
+          "AI agent memory",
+          "retrieval-augmented generation",
+          "LLM evaluation",
+          "vector search"
+        ]
+      },
+      "publisher": {
+        "@type": "Person",
+        "@id": "https://hamzashabbir.dev/#person"
+      },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "HOSTED_URL" },
+      "image": "HOSTED_URL/cover.png",
+      "keywords": "AI agent memory benchmark, Mem0 vs Zep vs Letta, LoCoMo benchmark, agent memory comparison 2026, best AI agent memory system, agent memory hallucination rate",
+      "about": [
+        { "@type": "SoftwareApplication", "name": "Mem0", "applicationCategory": "DeveloperApplication" },
+        { "@type": "SoftwareApplication", "name": "Zep", "alternateName": "Graphiti", "applicationCategory": "DeveloperApplication" },
+        { "@type": "SoftwareApplication", "name": "Letta", "alternateName": "MemGPT", "applicationCategory": "DeveloperApplication" },
+        { "@type": "SoftwareApplication", "name": "LangMem", "applicationCategory": "DeveloperApplication" },
+        { "@type": "SoftwareApplication", "name": "GoodMem", "applicationCategory": "DeveloperApplication" }
+      ],
+      "citation": {
+        "@type": "SoftwareSourceCode",
+        "name": "agent-memory-bench",
+        "codeRepository": "https://github.com/hamza-dev-tech/agent-memory-bench",
+        "programmingLanguage": "Python"
+      },
+      "disambiguatingDescription": "Sponsored inclusion is disclosed on the page: GoodMem paid to be included in the comparison. The harness and raw per-probe log are public and the numbers were not shown to the sponsor before publication."
+    },
+    {
+      "@type": "Dataset",
+      "@id": "HOSTED_URL#dataset",
+      "name": "Agent memory benchmark results, 2026-09-23",
+      "description": "Per-probe results for five agent memory systems over LoCoMo conversation 26: 419 turns, 120 probes, retrieved-text-only grading with gpt-4o-mini at temperature 0. One JSON line per probe with the question, gold answer, retrieved context size, model answer, both graders' verdicts and per-step latency.",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "creator": { "@id": "https://hamzashabbir.dev/#person" },
+      "dateCreated": "2026-09-23",
+      "measurementTechnique": "Retrieved-text-only question answering. Each system returns its top 10 chunks; those chunks alone are given to a single shared answering model at temperature 0. Graded by normalised string match plus an LLM judge, with all 125 disagreements read by hand.",
+      "variableMeasured": [
+        { "@type": "PropertyValue", "name": "Recall on answerable probes", "unitText": "percent" },
+        { "@type": "PropertyValue", "name": "Adversarial refusal rate", "unitText": "percent" },
+        { "@type": "PropertyValue", "name": "Search latency p50", "unitText": "milliseconds" },
+        { "@type": "PropertyValue", "name": "Injected memory size", "unitText": "tokens" },
+        { "@type": "PropertyValue", "name": "Ingest time per turn", "unitText": "seconds" }
+      ],
+      "distribution": {
+        "@type": "DataDownload",
+        "encodingFormat": "application/x-ndjson",
+        "contentUrl": "https://github.com/hamza-dev-tech/agent-memory-bench"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "HOSTED_URL#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the best AI agent memory system in 2026?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Under this benchmark's rules, GoodMem on its vendor-recommended configuration scored highest at 57.6% recall, followed by GoodMem at defaults (53.3%), Letta (52.2%), Mem0 (50.0%), LangMem (45.7%) and Zep (37.0%). No system exceeded 58%, and the right choice depends on whether you are optimising for recall, search latency, context cost or ingest throughput."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why is Mem0's published LoCoMo score 92.5% when this benchmark measured 50%?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Different method. This benchmark grades only the text a system retrieves, fed to one shared model at temperature 0. Most published evaluations let each system generate its own answer, which measures the answering model as much as the memory. The answering model, the judge and the grading rules also differ, and published scores rarely name them."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Zep's temporal knowledge graph help with time-based questions?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not in this test. Zep answered 8 of 22 temporal questions, against 13 for Mem0 and for GoodMem at defaults. It was last overall on recall while returning the smallest retrieved context of any system measured, at 212 tokens."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do AI agent memory systems hallucinate?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, and it is measurable. On 28 questions with no answer anywhere in the conversation, five of six configurations correctly refused 92.9% of the time. GoodMem's reranked configuration refused only 82.1% and LangMem 85.7%. Adding a reranker raised recall by 4.3 points and lowered the refusal rate by 10.8."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it worth running an LLM extraction pass on every conversation turn?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "On this workload, no. The two systems that store turns verbatim and run no model while ingesting, GoodMem and Letta, placed first and third, ahead of all three systems that extract facts per turn, while ingesting four to ten times faster."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can these agent memory benchmark results be reproduced?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The harness, all five adapters, the adjudication script and the full per-probe log are public at github.com/hamza-dev-tech/agent-memory-bench. Every number in the article is recomputable from probes.jsonl."
+          }
+        }
+      ]
+    }
+  ]
+}
