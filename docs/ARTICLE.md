@@ -125,7 +125,7 @@ figure is a band rather than a point.
 
 ### Overall
 
-| System | Recall (judge) | Recall (strict) | Refused adversarial | Search p50 | Memory tokens | Ingest/turn |
+| System | Recall (judge) | Recall (strict) | Refused adversarial | Search p50 | Memory tokens | Ingest per turn |
 |---|---:|---:|---:|---:|---:|---:|
 | **GoodMem** (vendor config) | **57.6%** | **54.3%** | 82.1% | 754 ms | 504 | 0.28 s |
 | **GoodMem** (defaults) | 53.3% | 48.9% | 92.9% | 633 ms | 503 | 0.28 s |
@@ -142,7 +142,7 @@ band. That is the part I would trust.
 ### By question type
 
 | System | Single-hop | Temporal | Multi-hop | Open-domain |
-|---|---|---|---|---|
+|---|---:|---:|---:|---:|
 | GoodMem (vendor config) | **30/44** | 12/22 | **8/17** | 3/9 |
 | GoodMem (defaults) | 26/44 | **13/22** | **8/17** | 2/9 |
 | Letta | 26/44 | 12/22 | **8/17** | 2/9 |
@@ -497,7 +497,7 @@ a top-10 with repeats of one fact and push distinct facts out of it.
 
 Rerunning on clean spaces moved GoodMem up **3.3 points on both tracks**.
 
-So the vendor paying for inclusion caught a defect that was **suppressing his
+So the vendor who paid for inclusion caught a defect that was **suppressing his
 own result**, and without it the published ranking would have been wrong. I
 cannot think of a better argument for publishing the harness.
 
@@ -511,8 +511,7 @@ else. A delete that silently fails leaves the same state as no delete at all.
 
 Not a ranking. It depends on which column you actually pay.
 
-**Choose Mem0 if search latency matters most.** 38 ms median, four times
-quicker than anything else, mid-table recall, and the least context to pay for
+**Choose Mem0 if search latency matters most.** 38 ms median, not quite twice as quick as the next fastest, mid-table recall, and the least context to pay for
 among the self-hosted options at 353 tokens. Weak on multi-hop.
 
 **Choose Zep if context cost dominates.** 212 tokens per answer, by a distance
@@ -601,7 +600,7 @@ Every number here is recomputable from `probes.jsonl`.
 
 ## Disclosure
 
-GoodMem's team are paying for their system to be included in this comparison.
+GoodMem's team paid for their system to be included in this comparison.
 
 - The instance and API key were supplied by them.
 - The vendor-config track uses the configuration they recommended.
