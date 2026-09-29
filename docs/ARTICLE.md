@@ -201,11 +201,12 @@ anything here while finding more than anything except its own tuned
 configuration.
 
 Its weakness is the clock. **633 ms at the median and 1,123 ms at p95**, the
-slowest search in the table by a factor of two. It is the only hosted system
-here, so a good part of that is a network round trip I would not pay
-self-hosting it, and none of the others were tested over a network. Read the
-latency column as "hosted product, from Pakistan, over the public internet"
-rather than as a property of the engine.
+slowest search in the table by a factor of two. I tested it on GoodMem Cloud, the only
+system here reached over a network, so a good part of that is a round trip
+from Pakistan over the public internet. GoodMem also installs on your own
+server with one command, which would not pay that trip, and I did not measure
+that setup. Read the latency column as "cloud product, from Pakistan" rather
+than as a property of the engine.
 
 It also has the widest strict-versus-lenient gap on its defaults row, 4.3
 points, which means more of its correct answers were the arguable kind.
@@ -395,7 +396,7 @@ self-hosted system. Top 10 retrieved for everyone. Fixed seed.
 
 | System | Version | Licence | How it stores | LLM calls ingesting |
 |---|---|---|---|---|
-| GoodMem | hosted instance | not open source, free to self-host commercially | chunks in a managed space | **none** |
+| GoodMem | GoodMem Cloud | not open source, free to self-host commercially | chunks in a GoodMem space | **none** |
 | Mem0 | 2.1.0 | Apache 2.0 | extracted facts, local Qdrant | one or more per turn |
 | LangMem | 0.0.30 | MIT | extracted to a LangGraph store | one per turn |
 | Zep (Graphiti) | 0.30.2 | Apache 2.0 | temporal knowledge graph, Kuzu | several per turn |
@@ -406,8 +407,9 @@ collapsed it into "hosted" and left the wrong impression. GoodMem's server is
 not open source, but it is **free to self-host for commercial use** under the
 vendor's Free Binary License, with perpetual rights to versions obtained under
 it; managed hosting is an optional paid product. That is a different fact from
-price, and worth separating. It ran here on a hosted instance because that is
-what was supplied, not because self-hosting costs money.
+price, and worth separating. It ran here on GoodMem Cloud because that is
+what was supplied, not because self-hosting costs money. The self-install is
+one command, from the [GoodMem quick start](https://goodmem.ai/quick-start).
 
 That last column decides how you read the ingest figures, which is why it is in
 the table and not a footnote.
@@ -525,8 +527,9 @@ choosing 0.11.7 unless you are willing to run Postgres.
 
 **Choose GoodMem if recall is the thing you are buying** and you can tolerate
 the refusal trade on its tuned configuration, or run it at defaults, where it
-is second on recall with a 92.9% refusal rate. It is hosted, so its 633 ms
-includes a network round trip.
+is second on recall with a 92.9% refusal rate. It runs on GoodMem Cloud or on
+your own server. I tested the cloud, so its 633 ms includes a network round
+trip that a self-installed copy would not pay.
 
 **I would not choose LangMem on these numbers.** Worst or near-worst on every
 axis measured here.
@@ -583,9 +586,9 @@ Every number here is recomputable from `probes.jsonl`.
   `--conversations 10` and the dataset has ten.
 - **Letta is a year behind.** 0.11.7 shipped in September 2025 and everything
   newer needs Postgres. These are that version's numbers.
-- **GoodMem is hosted, everything else is local.** Its latency includes a
-  network round trip. Right comparison for the hosted product, wrong one for
-  self-hosting it.
+- **GoodMem ran on its cloud, everything else ran locally.** Its latency
+  includes a network round trip. Right comparison for GoodMem Cloud, wrong one
+  for a self-installed GoodMem, which was not tested.
 - **Letta and GoodMem are not measured at what they are for.** Both are agent
   runtimes that would normally curate memory with their own model. Writing
   turns in verbatim and reading chunks back is the only way to compare them
