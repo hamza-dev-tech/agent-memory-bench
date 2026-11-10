@@ -62,15 +62,22 @@ as a separate row.
 
 ## Models
 
-- Answering and judging: `openai/gpt-oss-120b` through Groq, temperature 0.
+- **The published run** used `gpt-4o-mini` on `https://api.openai.com/v1` at
+  temperature 0, for answering, for grading, and for the extraction Mem0, LangMem
+  and Zep run on every turn. The one-conversation workload cost about $1.70.
+  `scripts/reproduce.py` sets exactly this.
+- **The code's default** is `openai/gpt-oss-120b` through Groq, temperature 0. It
+  is not what the table was measured on. Groq's free tier caps a request at 8,000
+  tokens and Mem0's extraction prompt alone is about 8,478, so on the free tier
+  every Mem0 write is rejected. Groq's Developer tier serves the same model
+  without that cap.
 - Embeddings: `nomic-embed-text-v1.5`, run locally through transformers for the
   self-hosted systems and on the vendor's hosting for GoodMem. Same weights,
   different host, noted in the results.
 
-An open-weights model extracts memories less well than a frontier model, so every
-system's absolute score is lower than it would be on GPT-class models. That is
-fine: the comparison holds because every system gets the same model, and the
-whole run costs nothing.
+The comparison holds because every system in a run gets the same model. Scores
+from runs on different models are not comparable with each other, so a run on
+the default will not match the table, and is not meant to.
 
 ## Running it
 
@@ -81,15 +88,24 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python scripts/fetch_locomo.py
 
-export GROQ_API_KEY=...          # free tier is enough
+export OPENAI_API_KEY=...        # the published run used gpt-4o-mini, see Models
 export GOODMEM_API_KEY=...       # only if you are running GoodMem
 
-# start small
-python scripts/run.py --systems goodmem --conversations 1 --probes 10
+# check the workload matches the published run, without spending anything
+python scripts/reproduce.py --check
 
-# the real thing
-python scripts/run.py --conversations 2 --probes 60
+# start small: a smoke test, the numbers are not comparable to anything
+python scripts/run.py --systems mem0 --conversations 1 --probes 10 --max-turns 60
+
+# reproduce the published table: same models, same workload, one command
+python scripts/reproduce.py
 ```
+
+`reproduce.py` is a thin wrapper. By hand, the published workload is
+`--conversations 1 --probes 120 --adversarial 28`, and the models come from the
+three variables under [Picking a model endpoint](#picking-a-model-endpoint).
+Leaving out `--adversarial 28` falls back to 10 and draws a different probe set,
+so the numbers will not line up with the table.
 
 Output lands in `results/<run-id>/`:
 

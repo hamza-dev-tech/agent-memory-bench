@@ -628,8 +628,14 @@ the difference is whether the code is public. It is.
 git clone https://github.com/hamza-dev-tech/agent-memory-bench
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 python scripts/fetch_locomo.py
-python scripts/run.py --systems mem0 langmem zep --conversations 1 --probes 120
+export OPENAI_API_KEY=...
+python scripts/reproduce.py --systems mem0 langmem zep
 ```
+
+`reproduce.py` sets the models used here (`gpt-4o-mini` at temperature 0) and the
+workload flags, `--conversations 1 --probes 120 --adversarial 28`. All three
+flags matter: without `--adversarial 28` the harness draws a different set of
+probes and the numbers will not match.
 
 `probes.jsonl` carries one JSON line per probe: the question, the gold answer,
 what the system retrieved, what the model answered, what both graders said, and
