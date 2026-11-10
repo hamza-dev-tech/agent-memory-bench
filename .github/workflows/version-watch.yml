@@ -1,0 +1,37 @@
+name: version watch
+
+# Weekly: has any measured system shipped a release since the published run?
+# If so, keep one open issue listing them, so the table never goes stale
+# without anyone noticing. Reads PyPI only; needs no secrets.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - id: versions
+        run: python scripts/check_versions.py --markdown report.md
+      - name: Open or update the issue
+        if: steps.versions.outputs.newer == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="New releases since the published run"
+          num=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue edit "$num" --body-file report.md
+          else
+            gh issue create --title "$title" --body-file report.md
+          fi
