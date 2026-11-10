@@ -24,7 +24,8 @@ difference is method, and this repo is the method.
 
 If that is useful, a star helps the next person find a number they can check
 rather than one they have to take on faith. If your system is not in the table
-and you would like it to be, open an issue: adapters are about 80 lines and the
+and you would like it to be, open an issue. The contract is six methods and
+[docs/ADDING_A_SYSTEM.md](docs/ADDING_A_SYSTEM.md) walks through one, and the
 result gets published either way.
 
 ## What it measures

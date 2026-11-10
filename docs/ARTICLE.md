@@ -648,8 +648,8 @@ instead of one they have to take on faith.
 
 [**github.com/hamza-dev-tech/agent-memory-bench**](https://github.com/hamza-dev-tech/agent-memory-bench)
 
-**Running a memory system I did not test?** Adapters are about 80 lines against
-a five-method interface. Open an issue or send me the endpoint and I will run
+**Running a memory system I did not test?** An adapter implements a six-method
+interface, and `docs/ADDING_A_SYSTEM.md` in the repo walks through one. Open an issue or send me the endpoint and I will run
 it on the same workload, same rules, same table, paid or not, and the result
 publishes either way. The same offer stands for any of the five above who
 thinks a configuration choice here misrepresents them: tell me what to change
