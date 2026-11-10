@@ -15,7 +15,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest ruff
+      # httpx is the one harness dependency the offline tests import (through
+      # membench.llm); the heavy ones, torch and the memory systems, stay out.
+      - run: pip install pytest ruff httpx
       - run: python scripts/fetch_locomo.py
       - run: ruff check .
       - run: python -m pytest tests -q
