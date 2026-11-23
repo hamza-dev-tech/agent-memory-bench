@@ -36,3 +36,19 @@ def test_only_newer_releases_are_flagged_and_reported():
     body = cv.render(rows)
     assert "| mem0 | `mem0ai` | 2.1.0 | 2.2.0 |" in body
     assert "letta" not in body.split("Rerun")[0]
+    assert "Letta Code" not in body
+
+
+def test_letta_is_read_from_the_server_line_not_letta_code():
+    f = [{"yanked": False}]
+    releases = {
+        "0.11.7": f, "0.16.7": f, "0.16.8": f,
+        "0.17.0rc1": f,                   # pre-release: skipped
+        "0.16.9": [{"yanked": True}],     # yanked: skipped
+        "0.20.0": [],                     # no files: skipped
+        "0.32.0": f, "0.34.12": f,        # Letta Code: over the line
+    }
+    assert cv.newest_below(releases, cv.SERVER_BELOW["letta"]) == "0.16.8"
+    assert cv.newest_below({"0.33.0": f}, cv.SERVER_BELOW["letta"]) is None
+    body = cv.render(cv.compare({"letta": "0.11.7"}, {"letta": "0.16.8"}))
+    assert "| letta | `letta` | 0.11.7 | 0.16.8 |" in body and "Letta Code" in body

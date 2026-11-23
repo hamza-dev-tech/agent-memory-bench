@@ -1,7 +1,21 @@
 # agent-memory-bench
 
-An open harness that runs the same long-conversation workload through several
-agent memory systems and grades what each one can recall.
+**The problem:** agent memory vendors publish recall of 80-93%, each measured
+its own way, so nobody can compare them or check them. This harness runs one
+long conversation through every system, hands what each retrieved to the same
+model, and grades the answer. Measured that way, the best scored 57.6%.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/results-dark.svg">
+  <img alt="Recall by system: GoodMem vendor config 57.6%, GoodMem defaults 53.3%, Letta 52.2%, Mem0 50.0%, LangMem 45.7%, Zep / Graphiti 37.0%, against vendor-published figures of 80-93%" src="docs/results-light.svg">
+</picture>
+
+- **One answering model for everyone.** Each system's retrieved text goes to the same `gpt-4o-mini`, so you compare memory, not answer writers.
+- **A workload you can prove is identical.** `python scripts/reproduce.py --check` confirms offline that you are grading the same 120 probes on the same data.
+- **Every probe on the record.** Question, gold answer, the system's answer, the verdict and the judge's reason, one line each in `probes.jsonl`.
+- **Two graders.** A string match and an LLM judge score every answer, and every disagreement goes to `review.csv` for a human.
+- **Five systems wired in.** Mem0, Letta, LangMem, Zep / Graphiti and GoodMem, and adding another is [six methods](docs/ADDING_A_SYSTEM.md).
+- **Never quietly stale.** A weekly check opens an issue when a measured system ships a newer release.
 
 The point is not to crown a winner. It is that anyone can rerun this and get
 the same numbers, including the vendors being measured.
@@ -19,8 +33,8 @@ the same numbers, including the vendors being measured.
 | Zep / Graphiti 0.30.2 | 37.0% | 92.9% | 163 ms | 212 | 3.65 s |
 
 419 turns, 120 probes, `gpt-4o-mini` at temperature 0 for every system, top 10
-retrieved. Published vendor figures for these systems run 80-93%; the
-difference is method, and this repo is the method.
+retrieved. The gap to the vendors' own figures is method, and this repo is the
+method. The chart above is drawn from the run log by `scripts/chart.py`.
 
 If that is useful, a star helps the next person find a number they can check
 rather than one they have to take on faith. If your system is not in the table
